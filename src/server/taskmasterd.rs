@@ -3,7 +3,6 @@
 /* -------------------------------------------------------------------------- */
 
 use std::io;
-
 use tcl::get_server_address;
 use tokio::net::TcpListener;
 
@@ -12,28 +11,22 @@ use tokio::net::TcpListener;
 /* -------------------------------------------------------------------------- */
 #[tokio::main]
 async fn main() {
-    println!("Hello, world from taskmasterd!");
+    println!("Starting Taskmaster Daemon");
 
     let listener = TcpListener::bind(get_server_address())
         .await
         .expect("Failed to bind tcp listener");
 
-    println!("Bind in {}", get_server_address());
-
     loop {
-        println!("accepting client");
+        println!("Waiting for Client To arrive");
         if let Err(error) = routine(&listener).await {
-            eprintln!("a error has occured while accepting a client: {error}");
+            eprintln!("An error has occurred while accepting a client: {error}");
         }
-        println!("client accepted");
+        println!("Client Accepted");
     }
 }
 
 async fn routine(listener: &TcpListener) -> io::Result<()> {
-    println!("in routine");
-    let (socket, address) = listener.accept().await?;
-    println!("Client connected: {}", address.ip());
-    println!("haha: {:?}", socket.peer_addr());
-
+    let (_socket, _address) = listener.accept().await?;
     Ok(())
 }
