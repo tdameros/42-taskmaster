@@ -4,16 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "taskmasterd"
-path = "src/server/taskmasterd.rs"
+name = "taskmaster_server"
+path = "src/server/server.rs"
 
 [[bin]]
-name = "taskmasterctl"
-path = "src/client/taskmasterctl.rs"
+
+name = "taskmaster_client"
+path = "src/client/client.rs"
 
 [lib]
 name = "tcl"
 path = "src/tcl/lib.rs"
 
 [dependencies]
-tokio = { version = "1.40.0", features = ["net", "macros", "rt-multi-thread"] }
+serde = { version = "1.0.210", features = ["derive"] } # used to tell other crate how to transforme a struct
+serde_yaml = "0.9.34" # used to transforme a struct into a yaml format
+tokio = { version = "1.40.0", features = ["full", "net", "macros", "io-util", "rt-multi-thread"] } # used to create the client/server architectur
