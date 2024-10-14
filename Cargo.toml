@@ -3,4 +3,17 @@ name = "taskmaster"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "taskmasterd"
+path = "src/server/taskmasterd.rs"
+
+[[bin]]
+name = "taskmasterctl"
+path = "src/client/taskmasterctl.rs"
+
+[lib]
+name = "tcl"
+path = "src/tcl/lib.rs"
+
 [dependencies]
+tokio = { version = "1.40.0", features = ["net", "macros", "rt-multi-thread"] }
