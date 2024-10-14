@@ -10,10 +10,9 @@ use tcl::get_server_address;
 /*                                    Main                                    */
 /* -------------------------------------------------------------------------- */
 fn main() {
-    // send_message();
     println!("Hello, world from taskmasterctl!");
     if let Err(error) = connect() {
-        eprintln!("a error has occured while connecting to the server: {error}");
+        eprintln!("a error has occurred while connecting to the server: {error}");
     }
 }
 
