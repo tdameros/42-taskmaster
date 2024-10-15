@@ -4,8 +4,8 @@
 
 use std::io::stdin;
 use tcl::{
-    get_server_address,
-    message::{send_message, Message},
+    message::{send, Response},
+    SOCKET_ADDRESS,
 };
 use tokio::net::TcpStream;
 
@@ -15,7 +15,7 @@ use tokio::net::TcpStream;
 #[tokio::main]
 async fn main() {
     println!("Trying to connect to the server");
-    let mut stream = TcpStream::connect(get_server_address())
+    let mut stream = TcpStream::connect(SOCKET_ADDRESS)
         .await
         .expect("Can't Connect to the server");
 
@@ -31,9 +31,7 @@ async fn main() {
             break;
         }
 
-        if let Err(e) =
-            send_message(&mut stream, &Message::Test(trimed_user_imput.to_owned())).await
-        {
+        if let Err(e) = send(&mut stream, &Response::Test(trimed_user_imput.to_owned())).await {
             eprintln!("Error while sending message to server: {e}");
         }
     }
