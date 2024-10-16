@@ -5,10 +5,7 @@
 use command::CliCommand;
 use std::io;
 use std::io::{stdin, Write};
-use tcl::{
-    message::{send, Response},
-    SOCKET_ADDRESS,
-};
+use tcl::SOCKET_ADDRESS;
 use tokio::net::TcpStream;
 
 /* -------------------------------------------------------------------------- */
@@ -41,18 +38,12 @@ async fn main() {
         match CliCommand::from_client_input(trimmed_user_input.as_str()) {
             Ok(command) => {
                 if let Err(error) = command.execute(&mut stream).await {
-                    eprintln!("error while parsing command: {error}");
-                    todo!()
+                    eprintln!("error while executing command: {error}");
                 }
             }
             Err(e) => {
                 eprintln!("error while parsing command: {e}");
-                CliCommand::help();
             }
         };
-
-        if let Err(e) = send(&mut stream, &Response::Test(trimmed_user_input.to_owned())).await {
-            eprintln!("Error while sending message to server: {e}");
-        }
     }
 }
