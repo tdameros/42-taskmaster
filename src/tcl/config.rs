@@ -2,8 +2,9 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{fs, path::Path};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::{fs, path::Path};
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
@@ -16,7 +17,8 @@ const CONFIG_FILE_PATH: &str = "./src/config.yaml";
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
-    pub programs: Vec<ProgramConfig>,
+    // pub programs: Vec<ProgramConfig>,
+    pub programs: HashMap<String, ProgramConfig>,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -26,6 +28,7 @@ pub enum AutoRestart {
     Always,
 
     /// if the exit code is not part of the expected exit code list
+    #[serde(rename = "unexpected")]
     Unexpected,
 
     #[default] // use the field below as default (needed for the default trait)
@@ -34,63 +37,60 @@ pub enum AutoRestart {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ProgramConfig {
-    #[serde(default)]
-    name: String,
-
     /// The command to use to launch the program
-    #[serde(default)]
+    #[serde(rename = "cmd", default)]
     command: String,
 
     /// The number of processes to start and keep running
-    #[serde(default)]
+    #[serde(rename = "numprocs", default)]
     number_of_process: u32,
 
     /// Whether to start this program at launch or not
-    #[serde(default)]
+    #[serde(rename = "autostart", default)]
     start_at_launch: bool,
 
     /// Whether the program should be restarted always, never, or on unexpected exits only
-    #[serde(default)]
+    #[serde(rename = "autorestart", default)]
     auto_restart: AutoRestart,
 
     /// Which return codes represent an "expected" exit status
-    #[serde(default)]
+    #[serde(rename = "exitcodes", default)]
     expected_exit_code: Vec<u32>,
 
     /// How long the program should be running after it’s started for it to be considered "successfully started"
-    #[serde(default)]
+    #[serde(rename = "starttime", default)]
     time_to_start: u32,
 
     /// How many times a restart should be attempted before aborting
-    #[serde(default)]
+    #[serde(rename = "startretries", default)]
     max_number_of_restart: u32,
 
     /// Which signal should be used to stop (i.e. exit gracefully) the program
-    #[serde(default)]
+    #[serde(rename = "stopsignal", default)]
     stop_signal: Signal,
 
     /// How long to wait after a graceful stop before killing the program
-    #[serde(default)]
+    #[serde(rename = "stoptime", default)]
     time_to_stop_gracefully: u32,
 
     /// Optional stdout redirection
-    #[serde(default)]
+    #[serde(rename = "stdout", default)]
     stdout_redirection: String,
 
     /// Optional stderr redirection
-    #[serde(default)]
+    #[serde(rename = "stderr", default)]
     stderr_redirection: String,
 
     /// Environment variables to set before launching the program
-    #[serde(default)]
-    environmental_variable_to_set: Vec<(String, String)>,
-
+    #[serde(rename = "env", default)]
+    environmental_variable_to_set: HashMap<String, String>,
+    // environmental_variable_to_set: Vec<(String, String)>,
     /// A working directory to set before launching the program
-    #[serde(default)]
+    #[serde(rename = "workingdir", default)]
     working_directory: String,
 
     /// An umask to set before launching the program
-    #[serde(default)]
+    #[serde(rename = "umask", default)]
     umask: u32,
 }
 

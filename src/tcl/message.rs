@@ -4,7 +4,10 @@
 
 use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 
 /* -------------------------------------------------------------------------- */
 /*                               Message Struct                               */

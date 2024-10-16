@@ -3,7 +3,13 @@
 /* -------------------------------------------------------------------------- */
 
 use std::io;
-use tcl::{config::Config, message::{receive, send, Response::{self, Test}}};
+use tcl::{
+    config::Config,
+    message::{
+        receive, send,
+        Response::{self, Test},
+    },
+};
 use tokio::net::{TcpListener, TcpStream};
 
 /* -------------------------------------------------------------------------- */
