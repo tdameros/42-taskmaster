@@ -8,7 +8,6 @@ name = "taskmaster_server"
 path = "src/server/server.rs"
 
 [[bin]]
-
 name = "taskmaster_client"
 path = "src/client/client.rs"
 

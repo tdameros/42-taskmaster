@@ -3,8 +3,13 @@
 /* -------------------------------------------------------------------------- */
 
 use std::io;
-use tcl::get_server_address;
-use tcl::message::{receive_message, send_message, Message, Message::Test};
+use tcl::{
+    config::Config,
+    message::{
+        receive, send,
+        Response::{self, Test},
+    },
+};
 use tokio::net::{TcpListener, TcpStream};
 
 /* -------------------------------------------------------------------------- */
@@ -13,8 +18,10 @@ use tokio::net::{TcpListener, TcpStream};
 #[tokio::main]
 async fn main() {
     println!("Starting Taskmaster Daemon");
+    let config = Config::load().unwrap();
+    println!("{config:?}");
 
-    let listener = TcpListener::bind(get_server_address())
+    let listener = TcpListener::bind(tcl::SOCKET_ADDRESS)
         .await
         .expect("Failed to bind tcp listener");
 
@@ -36,11 +43,11 @@ async fn routine(listener: &TcpListener) -> io::Result<()> {
 
 async fn handle_client(mut socket: TcpStream) {
     loop {
-        match receive_message::<Message>(&mut socket).await {
+        match receive::<Response>(&mut socket).await {
             Ok(message) => match message {
                 Test(string) => {
                     println!("Message: {string}");
-                    if let Err(error) = send_message(&mut socket, &Message::Test(string)).await {
+                    if let Err(error) = send(&mut socket, &Response::Test(string)).await {
                         println!("{error}");
                     }
                 }
