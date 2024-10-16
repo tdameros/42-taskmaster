@@ -3,7 +3,7 @@
 /* -------------------------------------------------------------------------- */
 
 use std::io;
-use tcl::message::{receive, send, Response, Response::Test};
+use tcl::{config::Config, message::{receive, send, Response::{self, Test}}};
 use tokio::net::{TcpListener, TcpStream};
 
 /* -------------------------------------------------------------------------- */
@@ -12,6 +12,8 @@ use tokio::net::{TcpListener, TcpStream};
 #[tokio::main]
 async fn main() {
     println!("Starting Taskmaster Daemon");
+    let config = Config::load().unwrap();
+    println!("{config:?}");
 
     let listener = TcpListener::bind(tcl::SOCKET_ADDRESS)
         .await

@@ -3,13 +3,12 @@
 /* -------------------------------------------------------------------------- */
 
 use std::{fs, path::Path};
-
 use serde::{Deserialize, Serialize};
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
 /* -------------------------------------------------------------------------- */
-const CONFIG_FILE_PATH: &str = "./";
+const CONFIG_FILE_PATH: &str = "./src/config.yaml";
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
@@ -35,6 +34,9 @@ pub enum AutoRestart {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ProgramConfig {
+    #[serde(default)]
+    name: String,
+
     /// The command to use to launch the program
     #[serde(default)]
     command: String,
@@ -132,7 +134,7 @@ pub enum Signal {
 impl Config {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
         let path = Path::new(CONFIG_FILE_PATH);
-        // println!("{:?}", path);
+        println!("{:?}", path);
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)

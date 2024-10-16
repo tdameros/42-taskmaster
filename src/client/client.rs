@@ -20,18 +20,18 @@ async fn main() {
         .expect("Can't Connect to the server");
 
     loop {
-        let mut user_imput = String::new();
-        if let Err(imput_error) = stdin().read_line(&mut user_imput) {
-            eprintln!("Error Occurred while reading user imput: {imput_error}, please close the terminal and restart the client");
+        let mut user_input = String::new();
+        if let Err(input_error) = stdin().read_line(&mut user_input) {
+            eprintln!("Error Occurred while reading user input: {input_error}, please close the terminal and restart the client");
         }
-        let trimed_user_imput = user_imput.trim();
+        let trimmed_user_input = user_input.trim();
 
-        if trimed_user_imput.eq_ignore_ascii_case("quit") {
-            // here we want to remplace this with a match to se what command the user is tell
+        if trimmed_user_input.eq_ignore_ascii_case("quit") {
+            // here we want to replace this with a match to se what command the user is tell
             break;
         }
 
-        if let Err(e) = send(&mut stream, &Response::Test(trimed_user_imput.to_owned())).await {
+        if let Err(e) = send(&mut stream, &Response::Test(trimmed_user_input.to_owned())).await {
             eprintln!("Error while sending message to server: {e}");
         }
     }
