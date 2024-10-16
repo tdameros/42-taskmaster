@@ -18,9 +18,17 @@ pub enum Response {
     Test(String),
 }
 
+#[derive(Serialize, Deserialize)]
+struct Start {}
 /// used to send order from a client to the server
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Request {}
+pub enum Request {
+    Status,
+    Start(String),
+    Stop(String),
+    Restart(String),
+    Reload,
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                  Function                                  */

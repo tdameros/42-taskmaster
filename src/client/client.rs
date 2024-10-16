@@ -2,12 +2,18 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use command::CliCommand;
 use std::io::stdin;
 use tcl::{
     message::{send, Response},
     SOCKET_ADDRESS,
 };
 use tokio::net::TcpStream;
+
+/* -------------------------------------------------------------------------- */
+/*                                   Module                                   */
+/* -------------------------------------------------------------------------- */
+mod command;
 
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
@@ -19,17 +25,30 @@ async fn main() {
         .await
         .expect("Can't Connect to the server");
 
+    CliCommand::help();
     loop {
         let mut user_input = String::new();
         if let Err(input_error) = stdin().read_line(&mut user_input) {
             eprintln!("Error Occurred while reading user input: {input_error}, please close the terminal and restart the client");
         }
-        let trimmed_user_input = user_input.trim();
+        let trimmed_user_input = user_input.trim().to_owned();
 
         if trimmed_user_input.eq_ignore_ascii_case("quit") {
             // here we want to replace this with a match to se what command the user is tell
             break;
         }
+        match CliCommand::from_client_input(trimmed_user_input.as_str()) {
+            Ok(command) => {
+                if let Err(error) = command.execute(&mut stream).await {
+                    eprintln!("error while parsing command: {error}");
+                    todo!()
+                }
+            }
+            Err(e) => {
+                eprintln!("error while parsing command: {e}");
+                CliCommand::help();
+            }
+        };
 
         if let Err(e) = send(&mut stream, &Response::Test(trimmed_user_input.to_owned())).await {
             eprintln!("Error while sending message to server: {e}");
