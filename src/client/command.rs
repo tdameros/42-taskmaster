@@ -78,18 +78,15 @@ impl CliCommand {
 
     pub fn help() {
         println!(
-            "
-        Taskmaster Client Commands:
+            "Taskmaster Client Commands:
 
-            status [PROGRAM]    Get the status of all the programs
-            start [PROGRAM]     Start a program
-            stop [PROGRAM]      Stop a program
-            restart [PROGRAM]   Restart a program
-            reload              Reload configuration file
-            exit                Exit client shell
-            help                Show this help message
-
-        "
+    status [PROGRAM]    Get the status of all the programs
+    start [PROGRAM]     Start a program
+    stop [PROGRAM]      Stop a program
+    restart [PROGRAM]   Restart a program
+    reload              Reload configuration file
+    exit                Exit client shell
+    help                Show this help message"
         )
     }
 

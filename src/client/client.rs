@@ -2,8 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::io;
 use command::CliCommand;
+use std::io;
 use std::io::{stdin, Write};
 use tcl::{
     message::{send, Response},
