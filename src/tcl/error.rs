@@ -31,6 +31,15 @@ impl std::fmt::Display for TaskmasterError {
     }
 }
 
+impl TaskmasterError {
+    pub fn kind(&self) -> std::io::ErrorKind {
+        match self {
+            TaskmasterError::IoError(err) => err.kind(),
+            _ => std::io::ErrorKind::Other,
+        }
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                             From Implementation                            */
 /* -------------------------------------------------------------------------- */
