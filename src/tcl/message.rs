@@ -15,7 +15,7 @@ use tokio::{
 /// used to send info from the server to a client
 #[derive(Serialize, serde::Deserialize)]
 pub enum Response {
-    Test(String)
+    Test(String),
 }
 
 #[derive(Serialize, Deserialize)]
