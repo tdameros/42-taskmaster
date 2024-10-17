@@ -86,8 +86,7 @@ impl CliCommand {
     /// Display the Cli command and argument
     pub fn help() {
         println!(
-            "
-        Taskmaster Client Commands:
+            "Taskmaster Client Commands:
 
             status              Get the status of all the programs
             start [PROGRAM]     Start a program
