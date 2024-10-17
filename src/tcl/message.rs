@@ -1,3 +1,11 @@
+/*!
+ * This Module is responsible for the transport of message (Serialization and deserialization)
+ * and provide a unify interface for all binary needing to use it with two generic function
+ * send and receive, it use it's own protocol to control the length of a given message,
+ * those should not exceed 1 MB. This module also provide a unify place for the common used struct
+ * during message exchange. it was decided that the protocol expect a response after a request no matter what
+ * so a client should expect to receive a response after a request
+ */
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
@@ -12,15 +20,11 @@ use tokio::{
 /* -------------------------------------------------------------------------- */
 /*                               Message Struct                               */
 /* -------------------------------------------------------------------------- */
-/// used to send info from the server to a client
+/// Represent what can be send to the client as a response
 #[derive(Serialize, serde::Deserialize)]
-pub enum Response {
-    Test(String),
-}
+pub enum Response {}
 
-#[derive(Serialize, Deserialize)]
-struct Start {}
-/// used to send order from a client to the server
+/// Represent what can be send to the server as request
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     Status,

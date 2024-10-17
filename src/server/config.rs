@@ -9,32 +9,19 @@ use std::{fs, path::Path};
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
 /* -------------------------------------------------------------------------- */
-const CONFIG_FILE_PATH: &str = "./src/config.yaml";
+const CONFIG_FILE_PATH: &str = "./config.yaml";
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
+/// struct representing the process the server should monitor
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
-    // pub programs: Vec<ProgramConfig>,
     pub programs: HashMap<String, ProgramConfig>,
 }
 
-/// this enum represent whenever a program should be auto restart if it's termination
-/// has been detected
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub enum AutoRestart {
-    Always,
-
-    /// if the exit code is not part of the expected exit code list
-    #[serde(rename = "unexpected")]
-    Unexpected,
-
-    #[default] // use the field below as default (needed for the default trait)
-    Never,
-}
-
+/// represent all configuration of a monitored program
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
@@ -94,6 +81,22 @@ pub struct ProgramConfig {
     umask: u32,
 }
 
+/// this enum represent whenever a program should be auto restart if it's termination
+/// has been detected
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub enum AutoRestart {
+    Always,
+
+    /// if the exit code is not part of the expected exit code list
+    #[serde(rename = "unexpected")]
+    Unexpected,
+
+    #[default] // use the field below as default (needed for the default trait)
+    Never,
+}
+
+/// represent all the signal
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub enum Signal {
     SIGABRT,
@@ -132,6 +135,7 @@ pub enum Signal {
 /*                               Implementation                               */
 /* -------------------------------------------------------------------------- */
 impl Config {
+    /// create a config base on the file located in the root of the project
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
         let path = Path::new(CONFIG_FILE_PATH);
         println!("{:?}", path);

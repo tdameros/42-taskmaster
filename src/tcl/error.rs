@@ -7,6 +7,7 @@ use std::error::Error;
 /* -------------------------------------------------------------------------- */
 /*                              Struct Definition                             */
 /* -------------------------------------------------------------------------- */
+/// represent the error the can occur using this lib function TODO check and maybe remove the error that arise from the binary usage ???
 #[derive(Debug)]
 pub enum TaskmasterError {
     IoError(std::io::Error),
@@ -37,10 +38,9 @@ impl TaskmasterError {
     /// Return whenever an error is due to a client disconnecting
     pub fn client_disconnected(&self) -> bool {
         match self {
-            TaskmasterError::IoError(error) => match error.kind() {
-                std::io::ErrorKind::UnexpectedEof => true,
-                _ => false,
-            },
+            TaskmasterError::IoError(error) => {
+                matches!(error.kind(), std::io::ErrorKind::UnexpectedEof)
+            }
             _ => false,
         }
     }
