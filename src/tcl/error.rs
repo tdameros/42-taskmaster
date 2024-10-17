@@ -10,8 +10,9 @@ use std::error::Error;
 #[derive(Debug)]
 pub enum TaskmasterError {
     IoError(std::io::Error),
-    SerdeError(String), // to be define
-    Custom(String),
+    SerdeError(serde_yaml::Error),
+    StringConversionError(std::string::FromUtf8Error),
+    Custom(String), // this will disappear over time
     MessageTooLong,
 }
 
@@ -27,15 +28,20 @@ impl std::fmt::Display for TaskmasterError {
             TaskmasterError::SerdeError(e) => write!(f, "Serialization error: {e}"),
             TaskmasterError::MessageTooLong => write!(f, "Message exceeds maximum length"),
             TaskmasterError::Custom(e) => write!(f, "Error: {e}"),
+            TaskmasterError::StringConversionError(e) => write!(f, "String Conversion Error: {e}"),
         }
     }
 }
 
 impl TaskmasterError {
-    pub fn kind(&self) -> std::io::ErrorKind {
+    /// Return whenever an error is due to a client disconnecting
+    pub fn client_disconnected(&self) -> bool {
         match self {
-            TaskmasterError::IoError(err) => err.kind(),
-            _ => std::io::ErrorKind::Other,
+            TaskmasterError::IoError(error) => match error.kind() {
+                std::io::ErrorKind::UnexpectedEof => true,
+                _ => false,
+            },
+            _ => false,
         }
     }
 }
@@ -44,11 +50,19 @@ impl TaskmasterError {
 /*                             From Implementation                            */
 /* -------------------------------------------------------------------------- */
 impl From<std::io::Error> for TaskmasterError {
-    fn from(value: std::io::Error) -> Self {
-        TaskmasterError::IoError(value)
+    fn from(error: std::io::Error) -> Self {
+        TaskmasterError::IoError(error)
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                               Common Function                              */
-/* -------------------------------------------------------------------------- */
+impl From<serde_yaml::Error> for TaskmasterError {
+    fn from(error: serde_yaml::Error) -> Self {
+        TaskmasterError::SerdeError(error)
+    }
+}
+
+impl From<std::string::FromUtf8Error> for TaskmasterError {
+    fn from(error: std::string::FromUtf8Error) -> Self {
+        TaskmasterError::StringConversionError(error)
+    }
+}

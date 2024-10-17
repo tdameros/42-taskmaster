@@ -20,12 +20,14 @@ mod command;
 /* -------------------------------------------------------------------------- */
 #[tokio::main]
 async fn main() {
+    // connect to the server
     println!("Trying to connect to the server");
     let mut stream = TcpStream::connect(SOCKET_ADDRESS)
         .await
         .expect("Can't Connect to the server");
+    CliCommand::help(); // display the cli manual
 
-    CliCommand::help();
+    // the actual cli
     loop {
         let mut user_input = String::new();
         if let Err(input_error) = stdin().read_line(&mut user_input) {

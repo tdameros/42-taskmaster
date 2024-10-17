@@ -52,13 +52,14 @@ async fn handle_client(mut socket: TcpStream) {
                     }
                 }
             },
-            Err(error) => match error.kind() {
-                io::ErrorKind::UnexpectedEof => {
+            Err(error) => {
+                if error.client_disconnected() {
                     println!("Client has disconnected");
                     break;
+                } else {
+                    eprintln!("{error}")
                 }
-                _ => eprintln!("{error}"),
-            },
+            }
         }
     }
 }

@@ -3,7 +3,6 @@
 /* -------------------------------------------------------------------------- */
 
 use std::ops::Deref;
-
 use tcl::{
     error::TaskmasterError,
     message::{send, Request},
@@ -13,12 +12,16 @@ use tokio::net::TcpStream;
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
+/// this enum represent the set of all possible command that the client can receive
 pub enum CliCommand {
     Request(Request),
     Exit,
     Help,
 }
+
 impl CliCommand {
+    /// Try to produce a CliCommand enum based on the user input, 
+    /// returning the appropriate error if enable
     pub fn from_client_input(user_input: &str) -> Result<CliCommand, TaskmasterError> {
         let arguments: Vec<&str> = user_input.split_ascii_whitespace().collect();
         if arguments.len() > 2 {
@@ -56,6 +59,7 @@ impl CliCommand {
         Ok(cli_command)
     }
 
+    /// This Function will match the command and execute it properly 
     pub async fn execute(&self, stream: &mut TcpStream) -> Result<(), TaskmasterError> {
         match self {
             CliCommand::Exit => {
@@ -72,16 +76,20 @@ impl CliCommand {
         }
     }
 
+    /// TODO
+    /// i don't see the interest of this function since you can 
+    /// call the original instead
     pub fn exit() {
         std::process::exit(0);
     }
 
+    /// Display the Cli command and argument
     pub fn help() {
         println!(
             "
         Taskmaster Client Commands:
 
-            status [PROGRAM]    Get the status of all the programs
+            status              Get the status of all the programs
             start [PROGRAM]     Start a program
             stop [PROGRAM]      Stop a program
             restart [PROGRAM]   Restart a program
@@ -93,6 +101,7 @@ impl CliCommand {
         )
     }
 
+    /// same as the exit function above i don't see why this exist for now
     async fn forward_to_server(
         request: &Request,
         stream: &mut TcpStream,

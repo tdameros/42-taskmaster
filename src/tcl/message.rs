@@ -39,8 +39,7 @@ pub async fn send<'a, T: Serialize>(
     message: &T,
 ) -> Result<(), TaskmasterError> {
     // serialize the message
-    let serialized_message =
-        serde_yaml::to_string(message).map_err(|e| TaskmasterError::SerdeError(e.to_string()))?;
+    let serialized_message = serde_yaml::to_string(message)?;
 
     // check the message length and transform the length to send it with the message
     let length = serialized_message.len();
@@ -73,10 +72,8 @@ pub async fn receive<T: for<'a> Deserialize<'a>>(
     stream.read_exact(&mut buffer).await?;
 
     // deserialize the message into the demanded struct
-    let yaml_string =
-        String::from_utf8(buffer).map_err(|e| TaskmasterError::SerdeError(e.to_string()))?;
-    let received_message: T = serde_yaml::from_str(&yaml_string)
-        .map_err(|e| TaskmasterError::SerdeError(e.to_string()))?;
+    let yaml_string = String::from_utf8(buffer)?;
+    let received_message: T = serde_yaml::from_str(&yaml_string)?;
 
     // return the message if everything went right
     Ok(received_message)
