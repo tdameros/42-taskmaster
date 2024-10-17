@@ -2,7 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use config::Config;
+use logger::new_shared_logger;
 use std::io;
 use tcl::message::{receive, Request};
 use tokio::net::{TcpListener, TcpStream};
@@ -11,17 +11,25 @@ use tokio::net::{TcpListener, TcpStream};
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
 mod config;
+mod logger;
 
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
 /* -------------------------------------------------------------------------- */
 #[tokio::main]
 async fn main() {
+    let shared_logger = new_shared_logger().expect("Can't create the logger");
+    log_info!(shared_logger, "Starting a new server instance");
+
     // load the config
-    println!("Starting Taskmaster Daemon");
-    let config = Config::load()
+    log_info!(shared_logger, "Starting Taskmaster Daemon");
+    let shared_config = config::new_shared_config()
         .expect("please provide a file named 'config.yaml' at the root of this rust project");
-    println!("{config:?}");
+    log_info!(
+        shared_logger,
+        "{}",
+        format!("Loading Config: {shared_config:?}")
+    );
 
     // start the listener
     let listener = TcpListener::bind(tcl::SOCKET_ADDRESS)
@@ -30,7 +38,7 @@ async fn main() {
 
     // handle the client connection
     loop {
-        println!("Waiting for Client To arrive");
+        log_info!(shared_logger, "Waiting for Client To arrive");
         if let Err(error) = routine(&listener).await {
             eprintln!("An error has occurred while accepting a client: {error}");
         }
