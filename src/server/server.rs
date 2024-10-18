@@ -2,6 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use config::{Config, SharedConfig};
 use logger::{new_shared_logger, SharedLogger};
 use tcl::message::{receive, Request};
 use tokio::net::{TcpListener, TcpStream};
@@ -40,7 +41,11 @@ async fn main() {
         log_info!(shared_logger, "Waiting for Client To arrive");
         match listener.accept().await {
             Ok((socket, _)) => {
-                tokio::spawn(handle_client(socket, shared_logger.clone()));
+                tokio::spawn(handle_client(
+                    socket,
+                    shared_logger.clone(),
+                    shared_config.clone(),
+                ));
                 log_info!(shared_logger, "Client Accepted");
             }
             Err(error) => {
@@ -51,7 +56,11 @@ async fn main() {
 }
 
 /// do the actual match of the client request
-async fn handle_client(mut socket: TcpStream, shared_logger: SharedLogger) {
+async fn handle_client(
+    mut socket: TcpStream,
+    shared_logger: SharedLogger,
+    shared_config: SharedConfig,
+) {
     loop {
         match receive::<Request>(&mut socket).await {
             Ok(message) => match message {
@@ -69,6 +78,11 @@ async fn handle_client(mut socket: TcpStream, shared_logger: SharedLogger) {
                 }
                 Request::Reload => {
                     log_info!(shared_logger, "Reload Request gotten");
+                    *shared_config.write().expect("One of the holder of this lock panicked") = Config::load().expect("please provide a file named 'config.yaml' at the root of this rust project");
+                    log_info!(
+                        shared_logger,
+                        "The config has been reloaded: {shared_config:?}"
+                    );
                 }
             },
             Err(error) => {
