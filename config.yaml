@@ -12,7 +12,7 @@ programs:
     startretries: 3
     starttime: 5
     stopsignal: SIGTERM
-    stoptime: 10
+    stoptime: 5
     stdout: /tmp/nginx.stdout
     stderr: /tmp/nginx.stderr
     env:
