@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
 
 /* -------------------------------------------------------------------------- */
@@ -14,6 +15,8 @@ const CONFIG_FILE_PATH: &str = "./config.yaml";
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
+pub(super) type SharedConfig = Arc<RwLock<Config>>;
+
 /// struct representing the process the server should monitor
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
@@ -129,6 +132,10 @@ pub enum Signal {
     SIGXCPU,
     SIGXFSZ,
     SIGWINCH,
+}
+
+pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Error>> {
+    Ok(Arc::new(RwLock::new(Config::load()?)))
 }
 
 /* -------------------------------------------------------------------------- */
