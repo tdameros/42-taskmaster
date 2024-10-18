@@ -2,8 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use logger::new_shared_logger;
-use std::io;
+use logger::{new_shared_logger, SharedLogger};
 use tcl::message::{receive, Request};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -39,39 +38,46 @@ async fn main() {
     // handle the client connection
     loop {
         log_info!(shared_logger, "Waiting for Client To arrive");
-        if let Err(error) = routine(&listener).await {
-            eprintln!("An error has occurred while accepting a client: {error}");
+        match listener.accept().await {
+            Ok((socket, _)) => {
+                tokio::spawn(handle_client(socket, shared_logger.clone()));
+                log_info!(shared_logger, "Client Accepted");
+            }
+            Err(error) => {
+                log_error!(shared_logger, "{}", format!("Accepting Client: {error}"));
+            }
         }
-        println!("Client Accepted");
     }
 }
 
-/// do the reception of client and spawn a handler for each client connected
-async fn routine(listener: &TcpListener) -> io::Result<()> {
-    let (socket, _address) = listener.accept().await?;
-
-    tokio::spawn(handle_client(socket));
-    Ok(())
-}
-
 /// do the actual match of the client request
-async fn handle_client(mut socket: TcpStream) {
+async fn handle_client(mut socket: TcpStream, shared_logger: SharedLogger) {
     loop {
         match receive::<Request>(&mut socket).await {
             Ok(message) => match message {
-                Request::Status => todo!(),
-                Request::Start(_) => todo!(),
-                Request::Stop(_) => todo!(),
-                Request::Restart(_) => todo!(),
-                Request::Reload => todo!(),
+                Request::Status => {
+                    log_info!(shared_logger, "Status Request gotten");
+                }
+                Request::Start(_) => {
+                    log_info!(shared_logger, "Start Request gotten");
+                }
+                Request::Stop(_) => {
+                    log_info!(shared_logger, "Stop Request gotten");
+                }
+                Request::Restart(_) => {
+                    log_info!(shared_logger, "Restart Request gotten");
+                }
+                Request::Reload => {
+                    log_info!(shared_logger, "Reload Request gotten");
+                }
             },
             Err(error) => {
                 // if the error occurred because the client disconnected then the task of this thread is finished
                 if error.client_disconnected() {
-                    println!("Client has disconnected");
+                    log_error!(shared_logger, "Client Disconnected");
                     break;
                 } else {
-                    eprintln!("{error}")
+                    log_error!(shared_logger, "{error}");
                 }
             }
         }

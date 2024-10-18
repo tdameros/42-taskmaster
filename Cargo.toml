@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "taskmaster_server"
+name = "server" # j'ai changer le nom car c'est long a ecrir dans le terminal mais on pourra rechanger a la fin ^^
 path = "src/server/server.rs"
 
 [[bin]]
-name = "taskmaster_client"
+name = "client"
 path = "src/client/client.rs"
 
 [lib]
