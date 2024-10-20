@@ -2,6 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use crate::config::SharedConfig;
 use std::{
     collections::HashMap,
     process::Child,
@@ -9,12 +10,12 @@ use std::{
     thread,
     time::Duration,
 };
-use crate::config::SharedConfig;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
 /// this represent the running process
+#[derive(Debug, Default)]
 pub(super) struct ProcessManager {
     // we may have to move this into the library if we choose to use this struct as a base for the status command
     children: HashMap<String, Child>,
@@ -22,6 +23,9 @@ pub(super) struct ProcessManager {
 
 pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
 
+/* -------------------------------------------------------------------------- */
+/*                            Struct Implementation                           */
+/* -------------------------------------------------------------------------- */
 // these are more of a place holder than anything
 impl ProcessManager {
     /// return a new ProcessManager
@@ -73,4 +77,8 @@ impl ProcessManager {
             thread::sleep(Duration::from_secs(1));
         });
     }
+}
+
+pub(super) fn new_shared_process_manager() -> SharedProcessManager {
+    Arc::new(RwLock::new(ProcessManager::new()))
 }

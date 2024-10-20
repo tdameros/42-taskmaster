@@ -21,11 +21,11 @@ pub(super) struct Logger {
     file: RwLock<File>,
 }
 
+pub(super) type SharedLogger = Arc<Logger>;
+
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
-pub(super) type SharedLogger = Arc<Logger>;
-
 impl Logger {
     /// open a log file specified by the LOG_PATH constant, creating it if it doesn't exist
     /// appending to it if it does.
@@ -41,7 +41,7 @@ impl Logger {
 
     /// write the message to the logging file
     pub(super) fn log(&self, level: &str, message: &str) -> Result<(), std::io::Error> {
-        // get the time since unix epoch to be reworked for better formatting
+        // get the time since unix epoch TODO! reworked for better formatting
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("the time returned by SystemTime::now() is earlier than UNIX_EPOCH")

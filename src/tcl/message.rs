@@ -21,7 +21,7 @@ use tokio::{
 /*                               Message Struct                               */
 /* -------------------------------------------------------------------------- */
 /// Represent what can be send to the client as a response
-#[derive(Serialize, serde::Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Response {}
 
 /// Represent what can be send to the server as request
