@@ -24,11 +24,7 @@ enum HistoryDirection {
 
 impl CliShell {
     pub fn new() -> Self {
-        Self {
-            history: vec!["".to_string()],
-            history_index: 0,
-            current_line: String::new(),
-        }
+        Self::default()
     }
 
     /// Enable raw mode to read single keypresses without waiting for Enter
@@ -113,7 +109,7 @@ impl CliShell {
     }
 
     pub fn read_line(&mut self) -> String {
-        let orig_termios = Self::enable_raw_mode();
+        let origin_termios = Self::enable_raw_mode();
         print!("{PROMPT}");
         io::stdout().flush().unwrap();
         let mut input = Self::getch();
@@ -129,13 +125,24 @@ impl CliShell {
         }
         println!();
         let len = self.history.len();
-        // self.history[len - 1] = self.current_line.clone();
         self.history[len - 1].clone_from(&self.current_line);
-        self.history.push(String::new());
+        if !self.current_line.is_empty() {
+            self.history.push(String::new());
+        }
         let return_line = self.current_line.clone();
         self.current_line.clear();
         self.history_index = self.history.len() - 1;
-        Self::disable_raw_mode(orig_termios);
+        Self::disable_raw_mode(origin_termios);
         return_line
+    }
+}
+
+impl Default for CliShell {
+    fn default() -> Self {
+        Self {
+            history: vec![String::new()],
+            history_index: 0,
+            current_line: String::new(),
+        }
     }
 }
