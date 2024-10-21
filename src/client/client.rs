@@ -20,17 +20,18 @@ mod shell;
 
 #[tokio::main]
 async fn main() {
+    // connect to the server
     println!("Trying to connect to the server");
     let mut stream = TcpStream::connect(SOCKET_ADDRESS)
         .await
         .expect("Can't Connect to the server");
-
-    CliCommand::help();
+    CliCommand::help(); // display the cli manual
     let mut shell = CliShell::new();
     loop {
         let user_input = shell.read_line();
         let trimmed_user_input = user_input.trim().to_owned();
 
+        // executing the client order
         match CliCommand::from_client_input(trimmed_user_input.as_str()) {
             Ok(command) => {
                 if let Err(error) = command.execute(&mut stream).await {
@@ -38,7 +39,7 @@ async fn main() {
                 }
             }
             Err(e) => {
-                eprintln!("error while parsing command: {e}");
+                eprintln!("error while parsing command: {e}, tap 'help' for more info about available command or exit to 'close'");
             }
         };
     }

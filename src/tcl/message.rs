@@ -1,3 +1,11 @@
+/*!
+ * This Module is responsible for the transport of message (Serialization and deserialization)
+ * and provide a unify interface for all binary needing to use it with two generic function
+ * send and receive, it use it's own protocol to control the length of a given message,
+ * those should not exceed 1 MB. This module also provide a unify place for the common used struct
+ * during message exchange. it was decided that the protocol expect a response after a request no matter what
+ * so a client should expect to receive a response after a request
+ */
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
@@ -12,15 +20,11 @@ use tokio::{
 /* -------------------------------------------------------------------------- */
 /*                               Message Struct                               */
 /* -------------------------------------------------------------------------- */
-/// used to send info from the server to a client
-#[derive(Serialize, serde::Deserialize)]
-pub enum Response {
-    Test(String),
-}
+/// Represent what can be send to the client as a response
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Response {}
 
-#[derive(Serialize, Deserialize)]
-struct Start {}
-/// used to send order from a client to the server
+/// Represent what can be send to the server as request
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     Status,
@@ -39,8 +43,7 @@ pub async fn send<'a, T: Serialize>(
     message: &T,
 ) -> Result<(), TaskmasterError> {
     // serialize the message
-    let serialized_message =
-        serde_yaml::to_string(message).map_err(|e| TaskmasterError::SerdeError(e.to_string()))?;
+    let serialized_message = serde_yaml::to_string(message)?;
 
     // check the message length and transform the length to send it with the message
     let length = serialized_message.len();
@@ -73,10 +76,8 @@ pub async fn receive<T: for<'a> Deserialize<'a>>(
     stream.read_exact(&mut buffer).await?;
 
     // deserialize the message into the demanded struct
-    let yaml_string =
-        String::from_utf8(buffer).map_err(|e| TaskmasterError::SerdeError(e.to_string()))?;
-    let received_message: T = serde_yaml::from_str(&yaml_string)
-        .map_err(|e| TaskmasterError::SerdeError(e.to_string()))?;
+    let yaml_string = String::from_utf8(buffer)?;
+    let received_message: T = serde_yaml::from_str(&yaml_string)?;
 
     // return the message if everything went right
     Ok(received_message)

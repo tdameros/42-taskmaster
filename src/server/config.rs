@@ -4,37 +4,28 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
+use tcl::error::TaskmasterError;
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
 /* -------------------------------------------------------------------------- */
-const CONFIG_FILE_PATH: &str = "./src/config.yaml";
+const CONFIG_FILE_PATH: &str = "./config.yaml";
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
+pub(super) type SharedConfig = Arc<RwLock<Config>>;
+
+/// struct representing the process the server should monitor
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
-    // pub programs: Vec<ProgramConfig>,
     pub programs: HashMap<String, ProgramConfig>,
 }
 
-/// this enum represent whenever a program should be auto restart if it's termination
-/// has been detected
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub enum AutoRestart {
-    Always,
-
-    /// if the exit code is not part of the expected exit code list
-    #[serde(rename = "unexpected")]
-    Unexpected,
-
-    #[default] // use the field below as default (needed for the default trait)
-    Never,
-}
-
+/// represent all configuration of a monitored program
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
@@ -94,6 +85,24 @@ pub struct ProgramConfig {
     umask: u32,
 }
 
+/// this enum represent whenever a program should be auto restart if it's termination
+/// has been detected
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub enum AutoRestart {
+    #[serde(rename = "always")]
+    Always,
+
+    /// if the exit code is not part of the expected exit code list
+    #[serde(rename = "unexpected")]
+    Unexpected,
+
+    #[default] // use the field below as default (needed for the default trait)
+    #[serde(rename = "never")]
+    Never,
+}
+
+/// represent all the signal
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub enum Signal {
     SIGABRT,
@@ -128,13 +137,17 @@ pub enum Signal {
     SIGWINCH,
 }
 
+pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Error>> {
+    Ok(Arc::new(RwLock::new(Config::load()?)))
+}
+
 /* -------------------------------------------------------------------------- */
 /*                               Implementation                               */
 /* -------------------------------------------------------------------------- */
 impl Config {
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    /// create a config base on the file located in the root of the project
+    pub fn load() -> Result<Self, TaskmasterError> {
         let path = Path::new(CONFIG_FILE_PATH);
-        println!("{:?}", path);
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
