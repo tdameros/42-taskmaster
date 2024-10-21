@@ -4,6 +4,7 @@
 
 use config::{Config, SharedConfig};
 use logger::{new_shared_logger, SharedLogger};
+use process_manager::new_shared_process_manager;
 use tcl::message::{receive, Request};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -27,6 +28,10 @@ async fn main() {
     let shared_config = config::new_shared_config()
         .expect("please provide a file named 'config.yaml' at the root of this rust project");
     log_info!(shared_logger, "Loading Config: {shared_config:?}");
+
+    // launch the process manager
+    let shared_process_manager =
+        new_shared_process_manager(shared_config.clone(), shared_logger.clone());
 
     // start the listener
     log_info!(shared_logger, "Starting Taskmaster Daemon");

@@ -38,7 +38,7 @@ pub struct ProgramConfig {
 
     /// Whether to start this program at launch or not
     #[serde(rename = "autostart", default)]
-    start_at_launch: bool,
+    pub(super) start_at_launch: bool,
 
     /// Whether the program should be restarted always, never, or on unexpected exits only
     #[serde(rename = "autorestart", default)]

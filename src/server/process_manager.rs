@@ -2,23 +2,30 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use crate::config::SharedConfig;
+use crate::{config::SharedConfig, logger::SharedLogger};
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     process::Child,
     sync::{Arc, RwLock},
     thread,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
 /// this represent the running process
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct ProcessManager {
     // we may have to move this into the library if we choose to use this struct as a base for the status command
-    children: HashMap<String, Child>,
+    children: HashMap<String, Vec<RunningProcess>>,
+}
+
+#[derive(Debug)]
+struct RunningProcess {
+    handle: Child,
+    started_since: SystemTime, // to clarify
 }
 
 pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
@@ -29,8 +36,18 @@ pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
 // these are more of a place holder than anything
 impl ProcessManager {
     /// return a new ProcessManager
-    fn new() -> Self {
-        todo!()
+    fn new_from_config(shared_config: SharedConfig, shared_logger: SharedLogger) -> Self {
+        let process_manager = ProcessManager {
+            children: Default::default(),
+        };
+        let test = shared_config
+            .read()
+            .unwrap()
+            .programs
+            .iter()
+            .filter(|(program_name, program_config)| program_config.start_at_launch)
+            .for_each(|(program_name, program_config)| {});
+        process_manager
     }
 
     /// return a the handle to the process child has a mutable reference
@@ -79,6 +96,12 @@ impl ProcessManager {
     }
 }
 
-pub(super) fn new_shared_process_manager() -> SharedProcessManager {
-    Arc::new(RwLock::new(ProcessManager::new()))
+pub(super) fn new_shared_process_manager(
+    shared_config: SharedConfig,
+    shared_logger: SharedLogger,
+) -> SharedProcessManager {
+    Arc::new(RwLock::new(ProcessManager::new_from_config(
+        shared_config,
+        shared_logger,
+    )))
 }
