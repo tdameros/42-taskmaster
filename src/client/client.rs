@@ -3,14 +3,16 @@
 /* -------------------------------------------------------------------------- */
 
 use command::CliCommand;
-use std::io::{self, stdin, Write};
+use shell::CliShell;
 use tcl::SOCKET_ADDRESS;
 use tokio::net::TcpStream;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
+
 mod command;
+mod shell;
 
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
@@ -24,19 +26,9 @@ async fn main() {
         .await
         .expect("Can't Connect to the server");
     CliCommand::help(); // display the cli manual
-
-    // the actual cli
+    let mut shell = CliShell::new();
     loop {
-        // terminal prompt
-        print!("> ");
-        io::stdout().flush().expect("Error while flushing stdout");
-
-        // acquiring user input
-        let mut user_input = String::new();
-        if let Err(input_error) = stdin().read_line(&mut user_input) {
-            eprintln!("Error Occurred while reading user input: {input_error}, please close the terminal and restart the client");
-            return; // we need to close the program if this happen
-        }
+        let user_input = shell.read_line();
         let trimmed_user_input = user_input.trim().to_owned();
 
         // executing the client order
