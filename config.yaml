@@ -1,6 +1,6 @@
 programs:
   nginx:
-    cmd: "/usr/local/bin/nginx -c /etc/nginx/test.conf"
+    cmd: "ping google.com"
     numprocs: 1
     umask: 22
     workingdir: /tmp
@@ -19,8 +19,8 @@ programs:
       STARTED_BY: taskmaster
       ANSWER: 42
   vogsphere:
-    cmd: "/usr/local/bin/vogsphere-worker --no-prefork"
-    numprocs: 8
+    cmd: "/bin/ls"
+    numprocs: 1
     umask: 77
     workingdir: /tmp
     autostart: true

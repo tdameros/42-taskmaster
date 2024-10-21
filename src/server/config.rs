@@ -30,7 +30,7 @@ pub struct Config {
 pub struct ProgramConfig {
     /// The command to use to launch the program
     #[serde(rename = "cmd", default)]
-    command: String,
+    pub(super) command: String,
 
     /// The number of processes to start and keep running
     #[serde(rename = "numprocs", default)]

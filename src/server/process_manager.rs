@@ -4,13 +4,11 @@
 
 use crate::{
     config::{Config, ProgramConfig, SharedConfig},
-    log_error,
-    logger::{Logger, SharedLogger},
+    logger::{Logger},
 };
 use std::{
-    borrow::Borrow,
     collections::HashMap,
-    process::Child,
+    process::{Child, Command},
     sync::{Arc, RwLock},
     thread,
     time::{Duration, SystemTime},
@@ -51,14 +49,18 @@ impl ProcessManager {
             .iter()
             .filter(|(_, program_config)| program_config.start_at_launch)
             .for_each(|(program_name, program_config)| {
-                for _process_number in 0..program_config.number_of_process {
-                    if let Err(error) = process_manager.spawn_child(program_config, &program_name) {
-                        log_error!(logger, "error happened while spawning a process of the program : {program_name}: {error}");
-                        todo!(); // w'll see depending on what error could happen in the spawn command
-                    }
-                };
+                process_manager.spawn_program(program_name, program_config);
             });
         process_manager
+    }
+
+    pub fn spawn_program(&mut self, program_name: &str, program_config: &ProgramConfig) {
+        for _process_number in 0..program_config.number_of_process {
+            if let Err(error) = self.spawn_child(program_config, &program_name) {
+                // log_error!(logger, "error happened while spawning a process of the program : {program_name}: {error}");
+                // todo!(); // w'll see depending on what error could happen in the spawn command
+            }
+        }
     }
 
     /// return a the handle to the process child has a mutable reference
@@ -67,12 +69,24 @@ impl ProcessManager {
     }
 
     /// kill a given child
-    fn kill_child(
+    pub fn kill_childs(
         &mut self,
         name: &str,
         shared_config: SharedConfig,
     ) -> Result<(), std::io::Error> {
-        todo!()
+        match self.children.get_mut(name) {
+            Some(processes) => {
+                for process in processes.iter_mut() {
+                    println!("killing process for {}", process.handle.id());
+                    process.handle.kill()?;
+                }
+                processes.clear();
+            }
+            None => {
+                todo!() // Handle error
+            }
+        }
+        Ok(())
     }
 
     /// this function must spawn a child given the argument in the config, it's definition will probably need to change as we take more thing into consideration
@@ -81,7 +95,21 @@ impl ProcessManager {
         program_config: &ProgramConfig,
         name: &str,
     ) -> Result<(), std::io::Error> {
-        todo!()
+        let split_command: Vec<&str> = program_config.command.split(' ').collect();
+        if split_command.len() > 1 {
+            let child = Command::new(split_command.first().expect("Empty command"))
+                .args(&split_command[1..])
+                .spawn()?;
+            let process = RunningProcess {
+                handle: child,
+                started_since: SystemTime::now(),
+            };
+            self.children
+                .entry(name.to_string())
+                .or_default()
+                .push(process);
+        }
+        Ok(())
     }
 
     /// do one round of monitoring
