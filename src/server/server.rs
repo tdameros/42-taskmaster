@@ -30,8 +30,7 @@ async fn main() {
     log_info!(shared_logger, "Loading Config: {shared_config:?}");
 
     // launch the process manager
-    let shared_process_manager =
-        new_shared_process_manager(shared_config.clone(), shared_logger.clone());
+    let shared_process_manager = new_shared_process_manager(&shared_config, &shared_logger);
 
     // start the listener
     log_info!(shared_logger, "Starting Taskmaster Daemon");

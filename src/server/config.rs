@@ -34,7 +34,7 @@ pub struct ProgramConfig {
 
     /// The number of processes to start and keep running
     #[serde(rename = "numprocs", default)]
-    number_of_process: u32,
+    pub(super) number_of_process: u32,
 
     /// Whether to start this program at launch or not
     #[serde(rename = "autostart", default)]

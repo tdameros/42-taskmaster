@@ -2,7 +2,11 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use crate::{config::SharedConfig, logger::SharedLogger};
+use crate::{
+    config::{Config, ProgramConfig, SharedConfig},
+    log_error,
+    logger::{Logger, SharedLogger},
+};
 use std::{
     borrow::Borrow,
     collections::HashMap,
@@ -36,17 +40,24 @@ pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
 // these are more of a place holder than anything
 impl ProcessManager {
     /// return a new ProcessManager
-    fn new_from_config(shared_config: SharedConfig, shared_logger: SharedLogger) -> Self {
-        let process_manager = ProcessManager {
+    fn new_from_config(config: &RwLock<Config>, logger: &Logger) -> Self {
+        let mut process_manager = ProcessManager {
             children: Default::default(),
         };
-        let test = shared_config
+        config
             .read()
             .unwrap()
             .programs
             .iter()
-            .filter(|(program_name, program_config)| program_config.start_at_launch)
-            .for_each(|(program_name, program_config)| {});
+            .filter(|(_, program_config)| program_config.start_at_launch)
+            .for_each(|(program_name, program_config)| {
+                for _process_number in 0..program_config.number_of_process {
+                    if let Err(error) = process_manager.spawn_child(program_config, &program_name) {
+                        log_error!(logger, "error happened while spawning a process of the program : {program_name}: {error}");
+                        todo!(); // w'll see depending on what error could happen in the spawn command
+                    }
+                };
+            });
         process_manager
     }
 
@@ -67,7 +78,7 @@ impl ProcessManager {
     /// this function must spawn a child given the argument in the config, it's definition will probably need to change as we take more thing into consideration
     fn spawn_child(
         &mut self,
-        shared_config: SharedConfig,
+        program_config: &ProgramConfig,
         name: &str,
     ) -> Result<(), std::io::Error> {
         todo!()
@@ -97,11 +108,8 @@ impl ProcessManager {
 }
 
 pub(super) fn new_shared_process_manager(
-    shared_config: SharedConfig,
-    shared_logger: SharedLogger,
+    config: &RwLock<Config>,
+    logger: &Logger,
 ) -> SharedProcessManager {
-    Arc::new(RwLock::new(ProcessManager::new_from_config(
-        shared_config,
-        shared_logger,
-    )))
+    Arc::new(RwLock::new(ProcessManager::new_from_config(config, logger)))
 }
