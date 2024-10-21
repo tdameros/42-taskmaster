@@ -35,7 +35,7 @@ async fn main() {
         let mut user_input = String::new();
         if let Err(input_error) = stdin().read_line(&mut user_input) {
             eprintln!("Error Occurred while reading user input: {input_error}, please close the terminal and restart the client");
-            break; // we need to close the program if this happen
+            return; // we need to close the program if this happen
         }
         let trimmed_user_input = user_input.trim().to_owned();
 
@@ -47,7 +47,7 @@ async fn main() {
                 }
             }
             Err(e) => {
-                eprintln!("error while parsing command: {e}, tap 'help' for more info about available command");
+                eprintln!("error while parsing command: {e}, tap 'help' for more info about available command or exit to 'close'");
             }
         };
     }

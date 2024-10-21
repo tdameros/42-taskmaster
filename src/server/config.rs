@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
+use tcl::error::TaskmasterError;
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
@@ -88,6 +89,7 @@ pub struct ProgramConfig {
 /// has been detected
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub enum AutoRestart {
+    #[serde(rename = "always")]
     Always,
 
     /// if the exit code is not part of the expected exit code list
@@ -95,6 +97,7 @@ pub enum AutoRestart {
     Unexpected,
 
     #[default] // use the field below as default (needed for the default trait)
+    #[serde(rename = "never")]
     Never,
 }
 
@@ -143,9 +146,8 @@ pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Er
 /* -------------------------------------------------------------------------- */
 impl Config {
     /// create a config base on the file located in the root of the project
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load() -> Result<Self, TaskmasterError> {
         let path = Path::new(CONFIG_FILE_PATH);
-        println!("{:?}", path);
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)

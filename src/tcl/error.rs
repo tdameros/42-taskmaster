@@ -24,12 +24,13 @@ impl Error for TaskmasterError {}
 
 impl std::fmt::Display for TaskmasterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use TaskmasterError as TE;
         match self {
-            TaskmasterError::IoError(e) => write!(f, "IO error: {}", e),
-            TaskmasterError::SerdeError(e) => write!(f, "Serialization error: {e}"),
-            TaskmasterError::MessageTooLong => write!(f, "Message exceeds maximum length"),
-            TaskmasterError::Custom(e) => write!(f, "Error: {e}"),
-            TaskmasterError::StringConversionError(e) => write!(f, "String Conversion Error: {e}"),
+            TE::IoError(e) => write!(f, "IO error: {}", e),
+            TE::SerdeError(e) => write!(f, "Serialization error: {e}"),
+            TE::MessageTooLong => write!(f, "Message exceeds maximum length"),
+            TE::Custom(e) => write!(f, "Error: {e}"),
+            TE::StringConversionError(e) => write!(f, "String Conversion Error: {e}"),
         }
     }
 }
