@@ -125,8 +125,8 @@ impl CliShell {
         }
         println!();
         let len = self.history.len();
-        self.history[len - 1].clone_from(&self.current_line);
         if !self.current_line.is_empty() {
+            self.history[len - 1].clone_from(&self.current_line);
             self.history.push(String::new());
         }
         let return_line = self.current_line.clone();
