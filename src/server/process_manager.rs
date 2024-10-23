@@ -80,7 +80,7 @@ impl ProcessManager {
     pub fn kill_childs(
         &mut self,
         name: &str,
-        shared_config: SharedConfig, // TODO use it
+        config: &RwLock<Config>, // TODO use it
         logger: &Logger,
     ) -> Result<(), std::io::Error> {
         match self.children.get_mut(name) {
@@ -103,6 +103,8 @@ impl ProcessManager {
             // if no process are found for a given name we do nothing
             None => {}
         }
+        // remove the program from the hashmap key of running program since all of it's child where killed
+        self.children.remove_entry(name);
 
         Ok(())
     }
@@ -121,6 +123,10 @@ impl ProcessManager {
             //create the command using the command property given by the program config
             let mut tmp_child = Command::new(split_command.first().expect("Unreachable"));
 
+            // TODO change the pwd according to the config
+
+            // TODO add env variable
+
             // adding arguments if there are any in the command section of program config
             if split_command.len() > 1 {
                 tmp_child.args(&split_command[1..]);
@@ -135,6 +141,7 @@ impl ProcessManager {
             let process = RunningProcess {
                 handle: child,
                 started_since: SystemTime::now(),
+                time_since_killed: None,
             };
 
             // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
@@ -148,10 +155,38 @@ impl ProcessManager {
     }
 
     /// do one round of monitoring
-    fn monitor_once(&mut self, config: &RwLock<Config>) {
-        // check the status of all the child
+    fn monitor_once(&mut self, config: &RwLock<Config>, logger: &Logger) {
         // query the new config
-        // check what need to be changed based on the new config
+        let config_access = config.read().expect("Some user of the config lock has panicked");
+        let mut program_name_to_kill = Vec::new();
+
+        // iterate over all process
+        self.children.iter_mut().for_each(|(program_name, vec_running_process)| {
+            // check if the process name we are on is in the new config
+            match config_access.programs.get(program_name) {
+                // the program running is still in the config, so we just need to perform check
+                Some(program_config) => {
+
+                    vec_running_process.iter_mut().for_each(|running_process| {
+                        running_process.handle.try_wait();
+                    });
+                },
+                // the program running is not in the config anymore so we need to murder his family
+                None => {
+                    program_name_to_kill.push(program_name.clone());
+                },
+            }
+        });
+        
+        for program_name in program_name_to_kill.iter() {
+            self.kill_childs(program_name, config, logger);
+        }
+        // check the status of all the child
+        // if still running check if it was killed, if killed for longer then abort it
+        // if dead check the exit code and config to see how many time i can restart if dead before launch time
+        // else check the auto restart policy
+        // check for each program the number of running child if too many kill them else spawn them
+        // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
 
         todo!()
     }
