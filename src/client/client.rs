@@ -33,7 +33,7 @@ async fn main() {
                 process_user_input(user_input, &mut stream).await;
             }
             Err(error) => {
-                println!("Error reading line: {}", error);
+                eprintln!("Error reading line: {}", error);
                 return;
             }
         }

@@ -28,6 +28,7 @@ impl Cli {
         let origin_termios = Self::enable_raw_mode();
         Self::display_prompt()?;
         self.history.push(String::new());
+        let _ = self.history.restore();
         let mut input = Self::getch()?;
         while !(input.len() == 1 && input[0] == b'\n') {
             self.handle_input(input)?;
@@ -39,7 +40,6 @@ impl Cli {
         } else {
             let _ = self.history.pop();
         }
-        let _ = self.history.reset();
         let return_line = self.line.clone();
         self.line.clear();
         Self::disable_raw_mode(origin_termios);
@@ -121,7 +121,7 @@ impl Cli {
                 }
                 _ => {}
             }
-            if let Some(line) = self.history.get_line() {
+            if let Some(line) = self.history.get_current_line() {
                 self.line = line;
                 self.refresh_prompt()?;
             }

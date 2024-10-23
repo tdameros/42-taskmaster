@@ -1,17 +1,33 @@
+use std::error::Error;
+use std::fmt;
+
 #[derive(Default)]
 pub struct History {
     history: Vec<String>,
     history_index: usize,
 }
 
+#[derive(Debug)]
 pub enum HistoryError {
     Overflow,
     Underflow,
     Empty,
 }
 
+impl fmt::Display for HistoryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HistoryError::Overflow => write!(f, "forward overflow, not enough history"),
+            HistoryError::Underflow => write!(f, "backward underflow, not enough history"),
+            HistoryError::Empty => write!(f, "History is empty."),
+        }
+    }
+}
+
+impl Error for HistoryError {}
+
 impl History {
-    pub fn get_line(&self) -> Option<String> {
+    pub fn get_current_line(&self) -> Option<String> {
         if self.history.is_empty() {
             None
         } else {
@@ -39,7 +55,6 @@ impl History {
 
     pub fn push(&mut self, line: String) {
         self.history.push(line);
-        self.history_index = self.history.len() - 1;
     }
 
     pub fn pop(&mut self) -> Result<(), HistoryError> {
@@ -69,9 +84,10 @@ impl History {
         }
     }
 
-    pub fn reset(&mut self) -> Result<(), HistoryError> {
+    /// Restore history to the last line added
+    pub fn restore(&mut self) -> Result<(), HistoryError> {
         if !self.history.is_empty() {
-            self.history_index = 0;
+            self.history_index = self.history.len() - 1;
             Ok(())
         } else {
             Err(HistoryError::Empty)
