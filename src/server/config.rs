@@ -62,7 +62,7 @@ pub struct ProgramConfig {
 
     /// How long to wait after a graceful stop before killing the program
     #[serde(rename = "stoptime", default)]
-    time_to_stop_gracefully: u32,
+    pub(super) time_to_stop_gracefully: u64,
 
     /// Optional stdout redirection
     #[serde(rename = "stdout", default)]

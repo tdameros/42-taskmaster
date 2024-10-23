@@ -3,7 +3,9 @@
 /* -------------------------------------------------------------------------- */
 
 use crate::{
-    config::{Config, ProgramConfig, SharedConfig}, log_error, log_info, logger::Logger
+    config::{Config, ProgramConfig, SharedConfig},
+    log_error, log_info,
+    logger::{Logger, SharedLogger},
 };
 use std::{
     collections::HashMap,
@@ -64,13 +66,22 @@ impl ProcessManager {
     }
 
     /// this function spawn all the replica of a given program given a reference to a programs config
-    pub fn spawn_program(&mut self, program_name: &str, program_config: &ProgramConfig, logger: &Logger) {
+    pub fn spawn_program(
+        &mut self,
+        program_name: &str,
+        program_config: &ProgramConfig,
+        logger: &Logger,
+    ) {
         // for each process that must be spawn we spawned it using the given argument
         for process_number in 0..program_config.number_of_process {
-            // if the child can't be spawn the command is probably wrong or the privilege is not right we cannot do anything, 
+            // if the child can't be spawn the command is probably wrong or the privilege is not right we cannot do anything,
             // retrying would be useless sor we just log the error and go to the next which will probably fail too
             if let Err(error) = self.spawn_child(program_config, program_name) {
-                log_error!(logger, "{}", format!("Fatal couldn't spawn child : {process_number} because of : {error}"));
+                log_error!(
+                    logger,
+                    "{}",
+                    format!("Fatal couldn't spawn child : {process_number} because of : {error}")
+                );
             }
         }
     }
@@ -87,7 +98,11 @@ impl ProcessManager {
             // if the given program have running process we iterate over them and send to them the correct signal
             Some(processes) => {
                 for process in processes.iter_mut() {
-                    log_info!(logger, "about to kill process number : {}", process.handle.id());
+                    log_info!(
+                        logger,
+                        "about to kill process number : {}",
+                        process.handle.id()
+                    );
                     // TODO use the config to send the correct signal to kill the process
                     process.handle.kill()?;
 
@@ -98,19 +113,22 @@ impl ProcessManager {
                     }
                 }
                 processes.clear();
-                log_info!(logger, "all process for the program : {name} has been killed");
+                log_info!(
+                    logger,
+                    "all process for the program : {name} has been killed"
+                );
             }
             // if no process are found for a given name we do nothing
             None => {}
         }
         // remove the program from the hashmap key of running program since all of it's child where killed
-        self.children.remove_entry(name);
+        self.children.remove_entry(name); // TODO check this behavior once we introduce the delay before killing by which i mean sending a signal to the child because now the child die instant if we have the privilege
 
         Ok(())
     }
 
-    /// this function spawn a child given the program config for a program it then insert a newly created 
-    /// running process struct into the vec of running process for the given program name in self, 
+    /// this function spawn a child given the program config for a program it then insert a newly created
+    /// running process struct into the vec of running process for the given program name in self,
     /// creating it if it doesn't exist yet
     fn spawn_child(
         &mut self,
@@ -157,32 +175,57 @@ impl ProcessManager {
     /// do one round of monitoring
     fn monitor_once(&mut self, config: &RwLock<Config>, logger: &Logger) {
         // query the new config
-        let config_access = config.read().expect("Some user of the config lock has panicked");
+        let config_access = config
+            .read()
+            .expect("Some user of the config lock has panicked");
         let mut program_name_to_kill = Vec::new();
 
         // iterate over all process
-        self.children.iter_mut().for_each(|(program_name, vec_running_process)| {
-            // check if the process name we are on is in the new config
-            match config_access.programs.get(program_name) {
-                // the program running is still in the config, so we just need to perform check
-                Some(program_config) => {
+        self.children
+            .iter_mut()
+            .for_each(|(program_name, vec_running_process)| {
+                // check if the process name we are on is in the new config
+                match config_access.programs.get(program_name) {
+                    // the program running is still in the config, so we just need to perform check
+                    Some(program_config) => {
+                        // check the status of all the child
+                        vec_running_process.iter_mut().for_each(|running_process| {
+                            if let Some(exit_status) = running_process
+                                .handle
+                                .try_wait()
+                                .expect("error gotten while trying to read a child status")
+                            {
+                                // if the process is supposed to be dead then we send a SIGKILL to him
+                                if running_process.time_since_killed.is_some_and(
+                                    |time_since_killed| {
+                                        program_config.time_to_stop_gracefully
+                                            < SystemTime::now()
+                                                .duration_since(time_since_killed)
+                                                .unwrap_or_default().as_secs()
+                                                .into()
+                                    },
+                                ) {
+                                    let _ = running_process.handle.kill().inspect_err(|error| {log_error!(logger, "Can't kill a child: {error}");});
+                                } else if running_process.time_since_killed.is_none() {
+                                    // we did'nt killed the child
+                                    
+                                }
+                            } else {
 
-                    vec_running_process.iter_mut().for_each(|running_process| {
-                        running_process.handle.try_wait();
-                    });
-                },
-                // the program running is not in the config anymore so we need to murder his family
-                None => {
-                    program_name_to_kill.push(program_name.clone());
-                },
-            }
-        });
-        
+                            }
+                        });
+                    }
+                    // the program running is not in the config anymore so we need to murder his family
+                    None => {
+                        program_name_to_kill.push(program_name.to_owned());
+                    }
+                }
+            });
+
+        // killing all the program that must die
         for program_name in program_name_to_kill.iter() {
             self.kill_childs(program_name, config, logger);
         }
-        // check the status of all the child
-        // if still running check if it was killed, if killed for longer then abort it
         // if dead check the exit code and config to see how many time i can restart if dead before launch time
         // else check the auto restart policy
         // check for each program the number of running child if too many kill them else spawn them
@@ -191,13 +234,13 @@ impl ProcessManager {
         todo!()
     }
 
-    async fn monitor(shared_process_manager: SharedProcessManager, shared_config: SharedConfig) {
+    async fn monitor(shared_process_manager: SharedProcessManager, shared_config: SharedConfig, shared_logger: SharedLogger) {
         thread::spawn(move || loop {
             {
                 shared_process_manager
                     .write()
                     .expect("the lock has been poisoned")
-                    .monitor_once(&shared_config);
+                    .monitor_once(&shared_config, &shared_logger);
             }
 
             thread::sleep(Duration::from_secs(1));

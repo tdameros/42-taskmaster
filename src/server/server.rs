@@ -162,11 +162,16 @@ impl ClientHandler {
         let mut manager = shared_process_manager
             .write()
             .expect("One of the holder of this lock panicked");
-        match shared_config.read().expect("One of the holder of this lock panicked").programs.get(&name) {
+        match shared_config
+            .read()
+            .expect("One of the holder of this lock panicked")
+            .programs
+            .get(&name)
+        {
             Some(config) => {
-               manager.spawn_program(&name, &config); 
+                manager.spawn_program(&name, &config, &shared_logger);
                 // TODO: Implement response ACK
-            },
+            }
             None => {
                 log_error!(shared_logger, "No program named '{}' found", name);
             }
@@ -182,7 +187,7 @@ impl ClientHandler {
         let mut manager = shared_process_manager
             .write()
             .expect("One of the holder of this lock panicked");
-        match manager.kill_childs(&name, shared_config.clone()) {
+        match manager.kill_childs(&name, &shared_config, &shared_logger) {
             Ok(()) => {
                 // TODO: Implement response ACK
             }
