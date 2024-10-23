@@ -2,8 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use command::CliCommand;
-use shell::CliShell;
+use cli::Cli;
+use command::Command;
 use tcl::SOCKET_ADDRESS;
 use tokio::net::TcpStream;
 
@@ -11,9 +11,9 @@ use tokio::net::TcpStream;
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
 
+mod cli;
 mod command;
-mod shell;
-
+mod history;
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
 /* -------------------------------------------------------------------------- */
@@ -25,22 +25,36 @@ async fn main() {
     let mut stream = TcpStream::connect(SOCKET_ADDRESS)
         .await
         .expect("Can't Connect to the server");
-    CliCommand::help(); // display the cli manual
-    let mut shell = CliShell::new();
+    Command::help(); // display the cli manual
+    let mut shell = Cli::new();
     loop {
-        let user_input = shell.read_line();
-        let trimmed_user_input = user_input.trim().to_owned();
+        match shell.read_line() {
+            Ok(user_input) => {
+                process_user_input(user_input, &mut stream).await;
+            }
+            Err(error) => {
+                println!("Error reading line: {}", error);
+                return;
+            }
+        }
+    }
+}
 
-        // executing the client order
-        match CliCommand::from_client_input(trimmed_user_input.as_str()) {
-            Ok(command) => {
-                if let Err(error) = command.execute(&mut stream).await {
-                    eprintln!("error while executing command: {error}");
-                }
+async fn process_user_input(user_input: String, stream: &mut TcpStream) {
+    let trimmed_user_input = user_input.trim().to_owned();
+
+    if trimmed_user_input.is_empty() {
+        return;
+    }
+
+    match Command::from_client_input(trimmed_user_input.as_str()) {
+        Ok(command) => {
+            if let Err(error) = command.execute(stream).await {
+                eprintln!("Error while executing command: {error}");
             }
-            Err(e) => {
-                eprintln!("error while parsing command: {e}, tap 'help' for more info about available command or exit to 'close'");
-            }
-        };
+        }
+        Err(error) => {
+            eprintln!("Error while parsing command: {error}, type 'help' for more info or 'exit' to close.");
+        }
     }
 }
