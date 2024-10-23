@@ -1,5 +1,5 @@
 use crate::history::History;
-use libc::{tcgetattr, tcsetattr, termios, ECHO, ICANON, TCSANOW};
+use crate::libc::{tcgetattr, tcsetattr, Termios, ECHO, ICANON, TCSANOW};
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 use tcl::error::TaskmasterError;
@@ -47,7 +47,7 @@ impl Cli {
     }
 
     /// Enable raw mode to read single keypresses without waiting for Enter
-    fn enable_raw_mode() -> termios {
+    fn enable_raw_mode() -> Termios {
         let fd = io::stdin().as_raw_fd();
         let mut termios = unsafe {
             let mut termios = std::mem::zeroed();
@@ -65,7 +65,7 @@ impl Cli {
     }
 
     /// Restore the terminal to its original settings
-    fn disable_raw_mode(orig_termios: termios) {
+    fn disable_raw_mode(orig_termios: Termios) {
         let fd = io::stdin().as_raw_fd();
         unsafe {
             tcsetattr(fd, TCSANOW, &orig_termios);
