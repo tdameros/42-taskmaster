@@ -54,7 +54,7 @@ async fn process_user_input(user_input: String, stream: &mut TcpStream) {
             }
         }
         Err(error) => {
-            eprintln!("Error while parsing command: {error}, type 'help' for more info or 'exit' to close.");
+            eprintln!("Error while parsing command: {error}. Type 'help' for more info or 'exit' to close.");
         }
     }
 }

@@ -29,7 +29,7 @@ impl std::fmt::Display for TaskmasterError {
             TE::IoError(e) => write!(f, "IO error: {}", e),
             TE::SerdeError(e) => write!(f, "Serialization error: {e}"),
             TE::MessageTooLong => write!(f, "Message exceeds maximum length"),
-            TE::Custom(e) => write!(f, "Error: {e}"),
+            TE::Custom(e) => write!(f, "{e}"),
             TE::StringConversionError(e) => write!(f, "String Conversion Error: {e}"),
         }
     }
