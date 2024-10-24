@@ -209,7 +209,7 @@ impl ProcessManager {
             .expect("Some user of the config lock has panicked");
 
         let mut program_to_remove = Vec::new();
-        let mut program_to_restart = HashMap::<String, (u32, ProgramConfig)>::new();
+        let mut program_to_restart = HashMap::<String, (i64, ProgramConfig)>::new();
 
         // iterate over all process
         self.children
@@ -347,18 +347,28 @@ impl ProcessManager {
         // remove excess program
         self.children.iter_mut().for_each(|(program_name, vec_running_program)| {
             let number_of_non_stopping_process = vec_running_program.iter().filter(|running_process| {
-                running_process.has_received_shutdown_order()
+                !running_process.has_received_shutdown_order()
             }).count();
-            let overflowing_process_number = number_of_non_stopping_process - config_access.programs.get(program_name).expect("unreachable since we removed (AKA give a shutdown order) every program that didn't belong to the config anymore").number_of_process;
+            let config = config_access.programs.get(program_name);
+            let mut overflowing_process_number = (number_of_non_stopping_process - config_access.programs.get(program_name).expect("unreachable since we removed (AKA give a shutdown order) every program that didn't belong to the config anymore").number_of_process) as i64;
             if overflowing_process_number > 0 {
                 // we need to shutdown the difference
+                while overflowing_process_number > 0 {
+                    vec_running_program.last_mut().expect("unreachable since we have at least one excess process and that the number of desire process is unsigned").send_signal(&config_access.programs.get(program_name).unwrap().stop_signal);
+                    overflowing_process_number -= 1;
+                }
             } else if overflowing_process_number < 0 {
                 // we need to start restarting some program then start event more if it's not enough
+                // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
+                // match program_to_restart.get_mut(program_name) {
+                //     Some((restart_number, config)) => *restart_number = 0 - overflowing_process_number,
+                //     None => {program_to_restart.insert(program_name, (0 - overflowing_process_number, config_access.programs.get(program_name)));},
+                // }
             } else {
                 // we have just the right number of process we don't need to do anything
             }
         });
-        // handle the restarting program... if we know for a given program have less program to 
+        // handle the restarting program... if we know for a given program have less program to
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
     }
