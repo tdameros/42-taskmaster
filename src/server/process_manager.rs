@@ -340,8 +340,10 @@ impl ProcessManager {
                 },
             }
         }
-        // clean dead process from self
-        // killing all the program that must die
+
+        // remove excess program
+        
+        // handle the restarting program... if we know for a given program have less program to 
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
     }
