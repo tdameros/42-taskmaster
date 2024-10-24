@@ -34,7 +34,7 @@ pub struct ProgramConfig {
 
     /// The number of processes to start and keep running
     #[serde(rename = "numprocs", default)]
-    pub(super) number_of_process: u32,
+    pub(super) number_of_process: usize,
 
     /// Whether to start this program at launch or not
     #[serde(rename = "autostart", default)]
@@ -42,19 +42,19 @@ pub struct ProgramConfig {
 
     /// Whether the program should be restarted always, never, or on unexpected exits only
     #[serde(rename = "autorestart", default)]
-    auto_restart: AutoRestart,
+    pub(super) auto_restart: AutoRestart,
 
     /// Which return codes represent an "expected" exit status
     #[serde(rename = "exitcodes", default)]
-    expected_exit_code: Vec<u32>,
+    pub(super) expected_exit_code: Vec<u32>,
 
     /// How long the program should be running after it’s started for it to be considered "successfully started"
     #[serde(rename = "starttime", default)]
-    time_to_start: u32,
+    pub(super) time_to_start: u64,
 
     /// How many times a restart should be attempted before aborting
     #[serde(rename = "startretries", default)]
-    max_number_of_restart: u32,
+    pub(super) max_number_of_restart: u32,
 
     /// Which signal should be used to stop (i.e. exit gracefully) the program
     #[serde(rename = "stopsignal", default)]

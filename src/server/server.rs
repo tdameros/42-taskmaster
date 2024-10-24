@@ -14,6 +14,7 @@ use tokio::net::{TcpListener, TcpStream};
 mod config;
 mod logger;
 mod process_manager;
+mod running_process;
 
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */

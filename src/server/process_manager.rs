@@ -6,10 +6,11 @@ use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_error, log_info,
     logger::{Logger, SharedLogger},
+    running_process::RunningProcess,
 };
 use std::{
     collections::HashMap,
-    process::{Child, Command},
+    process::Command,
     sync::{Arc, RwLock},
     thread,
     time::{Duration, SystemTime},
@@ -23,18 +24,6 @@ use std::{
 pub(super) struct ProcessManager {
     // we may have to move this into the library if we choose to use this struct as a base for the status command
     children: HashMap<String, Vec<RunningProcess>>,
-}
-
-#[derive(Debug)]
-struct RunningProcess {
-    // the handle to the process
-    handle: Child,
-
-    // the time when the process was launched
-    started_since: SystemTime, // to clarify
-
-    // use to determine when to abort the child
-    time_since_killed: Option<SystemTime>,
 }
 
 /// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
@@ -101,16 +90,12 @@ impl ProcessManager {
                     log_info!(
                         logger,
                         "about to kill process number : {}",
-                        process.handle.id()
+                        process.get_child_id()
                     );
                     // TODO use the config to send the correct signal to kill the process
-                    process.handle.kill()?;
+                    // process.send_signal(signal);
 
-                    // use to prevent a refreshing of the time to wait before aborting the child
-                    // in the case of a repeated order to stop said child (AKA spamming the stop command)
-                    if process.time_since_killed.is_none() {
-                        process.time_since_killed = Some(SystemTime::now());
-                    }
+                    process.kill()?;
                 }
                 processes.clear();
                 log_info!(
@@ -156,11 +141,7 @@ impl ProcessManager {
             let child = tmp_child.spawn()?;
 
             // create a instance of running process with the info of this given child
-            let process = RunningProcess {
-                handle: child,
-                started_since: SystemTime::now(),
-                time_since_killed: None,
-            };
+            let process = RunningProcess::new(child);
 
             // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
             self.children
@@ -179,6 +160,7 @@ impl ProcessManager {
             .read()
             .expect("Some user of the config lock has panicked");
         let mut program_name_to_kill = Vec::new();
+        let mut child_to_restart = Vec::new();
 
         // iterate over all process
         self.children
@@ -188,8 +170,40 @@ impl ProcessManager {
                 match config_access.programs.get(program_name) {
                     // the program running is still in the config, so we just need to perform check
                     Some(program_config) => {
+                        let mut number_of_missing_child = 0;
+                        let mut process_id_to_clean = Vec::new();
+
                         // check the status of all the child
                         vec_running_process.iter_mut().for_each(|running_process| {
+                            match running_process.get_exit_code() {
+                                Err(error) => {
+                                    log_error!(
+                                        logger,
+                                        "error gotten while trying to read a child status"
+                                    );
+                                }
+                                Ok(None) => {
+                                    // the program is alive
+                                    // we need to check if it's time to kill the child
+                                    if running_process.has_received_shutdown_order()
+                                        && running_process
+                                            .its_time_to_kill_the_child(program_config)
+                                    {
+                                        process_id_to_clean.push(running_process.get_child_id());
+                                        running_process.kill().inspect_err(|error| {
+                                            log_error!(logger, "Can't kill a child: {error}");
+                                        });
+                                    }
+                                }
+                                Ok(Some(maybe)) => {
+                                    // the program is dead
+                                    // we need to check if the program should be restarted
+                                    // first we need to check if the process is dead while starting
+                                    if running_process.program_was_running(program_config) {
+                                        
+                                    }
+                                }
+                            }
                             if let Some(exit_status) = running_process
                                 .handle
                                 .try_wait()
@@ -201,19 +215,65 @@ impl ProcessManager {
                                         program_config.time_to_stop_gracefully
                                             < SystemTime::now()
                                                 .duration_since(time_since_killed)
-                                                .unwrap_or_default().as_secs()
+                                                .unwrap_or_default()
+                                                .as_secs()
                                                 .into()
                                     },
                                 ) {
-                                    let _ = running_process.handle.kill().inspect_err(|error| {log_error!(logger, "Can't kill a child: {error}");});
+                                    let _ = running_process.handle.kill().inspect_err(|error| {
+                                        log_error!(logger, "Can't kill a child: {error}");
+                                    });
                                 } else if running_process.time_since_killed.is_none() {
-                                    // we did'nt killed the child
-                                    
+                                    // if the program wasn't considered as started yet
+                                    match program_config.time_to_start
+                                        > SystemTime::now()
+                                            .duration_since(running_process.started_since)
+                                            .unwrap_or_default()
+                                            .as_secs()
+                                            .into()
+                                    {
+                                        true => match program_config.max_number_of_restart > 0 {
+                                            true => {
+                                                child_to_restart
+                                                    .push((program_name, program_config));
+                                            }
+                                            false => {}
+                                        },
+                                        false => {}
+                                    }
+                                    // we did'nt killed the child we need to check if we should restart him
+                                    use crate::config::AutoRestart as AR;
+                                    match program_config.auto_restart {
+                                        AR::Always => {
+                                            child_to_restart.push((program_name, program_config));
+                                        }
+                                        AR::Unexpected => {
+                                            // if the child didn't exit successfully
+                                            if !exit_status.code().is_some_and(|exit_code| {
+                                                program_config
+                                                    .expected_exit_code
+                                                    .contains(&(exit_code as u32))
+                                            }) {
+                                                child_to_restart
+                                                    .push((program_name, program_config));
+                                            }
+                                        }
+                                        AR::Never => {}
+                                    }
                                 }
                             } else {
-
+                                // the program is alive
                             }
                         });
+                        if vec_running_process.len() > program_config.number_of_process {
+                            // to many child we need to kill extra
+                            for _ in 0..vec_running_process.len() - program_config.number_of_process
+                            {
+                                child_to_restart.push((program_name, program_config));
+                            }
+                        } else if vec_running_process.len() < program_config.number_of_process {
+                            // to little
+                        }
                     }
                     // the program running is not in the config anymore so we need to murder his family
                     None => {
@@ -226,15 +286,17 @@ impl ProcessManager {
         for program_name in program_name_to_kill.iter() {
             self.kill_childs(program_name, config, logger);
         }
-        // if dead check the exit code and config to see how many time i can restart if dead before launch time
-        // else check the auto restart policy
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
 
         todo!()
     }
 
-    async fn monitor(shared_process_manager: SharedProcessManager, shared_config: SharedConfig, shared_logger: SharedLogger) {
+    async fn monitor(
+        shared_process_manager: SharedProcessManager,
+        shared_config: SharedConfig,
+        shared_logger: SharedLogger,
+    ) {
         thread::spawn(move || loop {
             {
                 shared_process_manager
