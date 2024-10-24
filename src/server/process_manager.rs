@@ -9,11 +9,7 @@ use crate::{
     running_process::RunningProcess,
 };
 use std::{
-    collections::HashMap,
-    process::Command,
-    sync::{Arc, RwLock},
-    thread,
-    time::{Duration, SystemTime},
+    collections::HashMap, error::Error, fmt::Display, process::Command, sync::{Arc, RwLock}, thread, time::{Duration, SystemTime}
 };
 
 /* -------------------------------------------------------------------------- */
@@ -28,6 +24,26 @@ pub(super) struct ProcessManager {
 
 /// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
 pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
+
+#[derive(Debug)]
+pub(super) enum KillingChildError {
+    NoProgramFound,
+    CantKillProcess,
+}
+
+impl Error for KillingChildError {}
+
+impl Display for KillingChildError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl From<std::io::Error> for KillingChildError {
+    fn from(_: std::io::Error) -> Self {
+        KillingChildError::CantKillProcess
+    }
+}
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -77,39 +93,61 @@ impl ProcessManager {
 
     /// kill all child of a given process if no child exist for the given program name the function does nothing
     /// if the kill command failed (probably due to insufficient privilege) it's error is return
-    pub fn kill_childs(
+    pub(super) fn kill_childs(
         &mut self,
         name: &str,
         config: &RwLock<Config>, // TODO use it
         logger: &Logger,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<(), KillingChildError> {
+        // lock the config for immutable access
+        let config_access = config.read().expect("One owner of this lock panicked");
+
         match self.children.get_mut(name) {
             // if the given program have running process we iterate over them and send to them the correct signal
             Some(processes) => {
-                for process in processes.iter_mut() {
-                    log_info!(
-                        logger,
-                        "about to kill process number : {}",
-                        process.get_child_id()
-                    );
-                    // TODO use the config to send the correct signal to kill the process
-                    // process.send_signal(signal);
-
-                    process.kill()?;
+                /*
+                we need to decide if we keep the child around for this we need to know
+                if the process must be killed or gracefully shutdown
+                if gracefully shutdown we need to keep the process else if the kill
+                happened correctly we need to get ride of them if the kill didn't happened correctly
+                we need to exit and warn the user that this did'nt go according to plan. we can't however
+                remove the process
+                */
+                match config_access.programs.get(name) {
+                    Some(config) => {
+                        // here we keep the process just sending them the signal required by the config
+                        processes.iter_mut().for_each(|process| {
+                            log_info!(
+                                logger,
+                                "about to gracefully shutdown process number : {}",
+                                process.get_child_id()
+                            );
+                            process.send_signal(&config.stop_signal);
+                        });
+                        Ok(())
+                    },
+                    None => {
+                        // here we killed them
+                        // PS if you want to learn more about closure you can try to transform the for loop in the iter version to see what happen
+                        for process in processes.iter_mut() {
+                            log_info!(
+                                logger,
+                                "about to kill process number : {}",
+                                process.get_child_id()
+                            );
+                            process.kill()?;
+                        }
+                        Ok(())
+                    },
                 }
-                processes.clear();
-                log_info!(
-                    logger,
-                    "all process for the program : {name} has been killed"
-                );
             }
-            // if no process are found for a given name we do nothing
-            None => {}
+            // if no process are found for a given name we return the corresponding error
+            None => {
+                log_info!(logger, "tried to remove child of process: {name} but none where found");
+                Err(KillingChildError::NoProgramFound)
+            }
         }
-        // remove the program from the hashmap key of running program since all of it's child where killed
-        self.children.remove_entry(name); // TODO check this behavior once we introduce the delay before killing by which i mean sending a signal to the child because now the child die instant if we have the privilege
-
-        Ok(())
+        // here we don't remove the entry since the monitor will do it for use
     }
 
     /// this function spawn a child given the program config for a program it then insert a newly created
@@ -159,9 +197,9 @@ impl ProcessManager {
         let config_access = config
             .read()
             .expect("Some user of the config lock has panicked");
-        let mut program_name_to_kill = Vec::new();
-        let mut child_to_restart = Vec::new();
 
+        let mut program_to_remove = Vec::new();
+        
         // iterate over all process
         self.children
             .iter_mut()
@@ -170,17 +208,15 @@ impl ProcessManager {
                 match config_access.programs.get(program_name) {
                     // the program running is still in the config, so we just need to perform check
                     Some(program_config) => {
-                        let mut number_of_missing_child = 0;
-                        let mut process_id_to_clean = Vec::new();
-
-                        // check the status of all the child
-                        vec_running_process.iter_mut().for_each(|running_process| {
+                        // keep only the good child AKA healthy child
+                        vec_running_process.retain_mut(|running_process| {
                             match running_process.get_exit_code() {
                                 Err(error) => {
                                     log_error!(
                                         logger,
                                         "error gotten while trying to read a child status"
                                     );
+                                    true // we keep 
                                 }
                                 Ok(None) => {
                                     // the program is alive
@@ -189,103 +225,52 @@ impl ProcessManager {
                                         && running_process
                                             .its_time_to_kill_the_child(program_config)
                                     {
-                                        process_id_to_clean.push(running_process.get_child_id());
-                                        running_process.kill().inspect_err(|error| {
+                                        if let Err(error) = running_process.kill() {
                                             log_error!(logger, "Can't kill a child: {error}");
-                                        });
+                                            return true; // we keep it if we can't kill it
+                                        } else {
+                                            return false; // we don't keep it if we successfully killed him
+                                        }
                                     }
+                                    true // we keep every alive process except the one that should be dead and are successfully killed
                                 }
-                                Ok(Some(maybe)) => {
+                                Ok(Some(exit_code)) => {
                                     // the program is dead
                                     // we need to check if the program should be restarted
                                     // first we need to check if the process is dead while starting
-                                    if running_process.program_was_running(program_config) {
-                                        
-                                    }
-                                }
-                            }
-                            if let Some(exit_status) = running_process
-                                .handle
-                                .try_wait()
-                                .expect("error gotten while trying to read a child status")
-                            {
-                                // if the process is supposed to be dead then we send a SIGKILL to him
-                                if running_process.time_since_killed.is_some_and(
-                                    |time_since_killed| {
-                                        program_config.time_to_stop_gracefully
-                                            < SystemTime::now()
-                                                .duration_since(time_since_killed)
-                                                .unwrap_or_default()
-                                                .as_secs()
-                                                .into()
-                                    },
-                                ) {
-                                    let _ = running_process.handle.kill().inspect_err(|error| {
-                                        log_error!(logger, "Can't kill a child: {error}");
-                                    });
-                                } else if running_process.time_since_killed.is_none() {
-                                    // if the program wasn't considered as started yet
-                                    match program_config.time_to_start
-                                        > SystemTime::now()
-                                            .duration_since(running_process.started_since)
-                                            .unwrap_or_default()
-                                            .as_secs()
-                                            .into()
+                                    if running_process.program_was_running(program_config)
+                                        && program_config.max_number_of_restart > 0
                                     {
-                                        true => match program_config.max_number_of_restart > 0 {
-                                            true => {
-                                                child_to_restart
-                                                    .push((program_name, program_config));
-                                            }
-                                            false => {}
-                                        },
-                                        false => {}
-                                    }
-                                    // we did'nt killed the child we need to check if we should restart him
-                                    use crate::config::AutoRestart as AR;
-                                    match program_config.auto_restart {
-                                        AR::Always => {
-                                            child_to_restart.push((program_name, program_config));
-                                        }
-                                        AR::Unexpected => {
-                                            // if the child didn't exit successfully
-                                            if !exit_status.code().is_some_and(|exit_code| {
-                                                program_config
-                                                    .expected_exit_code
-                                                    .contains(&(exit_code as u32))
-                                            }) {
-                                                child_to_restart
-                                                    .push((program_name, program_config));
+                                        // we decrement the number of allowed restart for next time
+                                        program_config.max_number_of_restart -= 1;
+
+                                        
+                                        // then we increment the number of time that this program should be restarted
+                                        match process_id_to_restart.get_mut(program_name.as_str()) {
+                                            Some(number) => *number += 1,
+                                            None => {
+                                                process_id_to_restart
+                                                    .insert(program_name.as_str(), 1);
                                             }
                                         }
-                                        AR::Never => {}
                                     }
+                                    false // we don't keep dead program
                                 }
-                            } else {
-                                // the program is alive
                             }
                         });
-                        if vec_running_process.len() > program_config.number_of_process {
-                            // to many child we need to kill extra
-                            for _ in 0..vec_running_process.len() - program_config.number_of_process
-                            {
-                                child_to_restart.push((program_name, program_config));
-                            }
-                        } else if vec_running_process.len() < program_config.number_of_process {
-                            // to little
-                        }
                     }
                     // the program running is not in the config anymore so we need to murder his family
                     None => {
-                        program_name_to_kill.push(program_name.to_owned());
+                        // then this program must be removed
+                        program_to_remove.push(program_name.to_owned());
                     }
                 }
             });
 
+        for program in program_to_remove
+        // clean dead process from self
+        // self.remove_dead_process(logger);
         // killing all the program that must die
-        for program_name in program_name_to_kill.iter() {
-            self.kill_childs(program_name, config, logger);
-        }
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
 

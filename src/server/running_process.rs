@@ -40,7 +40,7 @@ impl RunningProcess {
 
     /// return if the child is still alive or an error if one
     /// occurred while trying to know if the child was alive
-    fn is_alive(&mut self) -> Result<bool, std::io::Error> {
+    pub(super) fn is_alive(&mut self) -> Result<bool, std::io::Error> {
         Ok(self.child.try_wait()?.is_some())
     }
 
@@ -65,6 +65,8 @@ impl RunningProcess {
         self.child.kill()
     }
 
+    /// return true if the child is still alive while having receive a graceful
+    /// shutdown request since longer than the maximum value present in the given config
     pub(super) fn its_time_to_kill_the_child(&self, program_config: &ProgramConfig) -> bool {
         self.time_since_shutdown
             .map(|time_since_shutdown| {
@@ -93,7 +95,7 @@ impl RunningProcess {
     }
 
     /// send the given signal to the child, starting the gracefully shutdown timer
-    pub(super) fn send_signal(&mut self, signal: Signal) {
+    pub(super) fn send_signal(&mut self, signal: &Signal) {
         // TODO use signal or other mean to send the correct signal
         self.time_since_shutdown = Some(SystemTime::now());
     }

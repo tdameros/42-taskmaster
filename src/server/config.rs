@@ -53,12 +53,13 @@ pub struct ProgramConfig {
     pub(super) time_to_start: u64,
 
     /// How many times a restart should be attempted before aborting
+    /// this is shared between replica
     #[serde(rename = "startretries", default)]
     pub(super) max_number_of_restart: u32,
 
     /// Which signal should be used to stop (i.e. exit gracefully) the program
     #[serde(rename = "stopsignal", default)]
-    stop_signal: Signal,
+    pub(super) stop_signal: Signal,
 
     /// How long to wait after a graceful stop before killing the program
     #[serde(rename = "stoptime", default)]

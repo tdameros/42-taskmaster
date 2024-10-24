@@ -193,6 +193,7 @@ impl ClientHandler {
                 // TODO: Implement response ACK
             }
             Err(error) => {
+                // TODO match and respond to the client accordingly
                 log_error!(shared_logger, "Failed to kill child process: {error}");
             }
         }
