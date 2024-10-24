@@ -188,7 +188,7 @@ impl ClientHandler {
         let mut manager = shared_process_manager
             .write()
             .expect("One of the holder of this lock panicked");
-        match manager.kill_childs(&name, &shared_config, &shared_logger) {
+        match manager.shutdown_childs(&name, &shared_config, &shared_logger) {
             Ok(()) => {
                 // TODO: Implement response ACK
             }

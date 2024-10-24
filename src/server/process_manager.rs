@@ -9,7 +9,13 @@ use crate::{
     running_process::RunningProcess,
 };
 use std::{
-    collections::HashMap, error::Error, fmt::Display, process::Command, sync::{Arc, RwLock}, thread, time::{Duration, SystemTime}
+    collections::HashMap,
+    error::Error,
+    fmt::Display,
+    process::Command,
+    sync::{Arc, RwLock},
+    thread,
+    time::{Duration, SystemTime},
 };
 
 /* -------------------------------------------------------------------------- */
@@ -91,9 +97,10 @@ impl ProcessManager {
         }
     }
 
-    /// kill all child of a given process if no child exist for the given program name the function does nothing
+    /// shutdown all child of a given process if no child exist for the given program name the function does nothing
+    /// if the config does'nt contain the program then SIGKILL is use instead
     /// if the kill command failed (probably due to insufficient privilege) it's error is return
-    pub(super) fn kill_childs(
+    pub(super) fn shutdown_childs(
         &mut self,
         name: &str,
         config: &RwLock<Config>, // TODO use it
@@ -125,7 +132,7 @@ impl ProcessManager {
                             process.send_signal(&config.stop_signal);
                         });
                         Ok(())
-                    },
+                    }
                     None => {
                         // here we killed them
                         // PS if you want to learn more about closure you can try to transform the for loop in the iter version to see what happen
@@ -138,12 +145,15 @@ impl ProcessManager {
                             process.kill()?;
                         }
                         Ok(())
-                    },
+                    }
                 }
             }
             // if no process are found for a given name we return the corresponding error
             None => {
-                log_info!(logger, "tried to remove child of process: {name} but none where found");
+                log_info!(
+                    logger,
+                    "tried to remove child of process: {name} but none where found"
+                );
                 Err(KillingChildError::NoProgramFound)
             }
         }
@@ -194,18 +204,19 @@ impl ProcessManager {
     /// do one round of monitoring
     fn monitor_once(&mut self, config: &RwLock<Config>, logger: &Logger) {
         // query the new config
-        let config_access = config
-            .read()
+        let mut config_access = config
+            .write()
             .expect("Some user of the config lock has panicked");
 
         let mut program_to_remove = Vec::new();
-        
+        let mut program_to_restart = HashMap::<String, (u32, ProgramConfig)>::new();
+
         // iterate over all process
         self.children
             .iter_mut()
             .for_each(|(program_name, vec_running_process)| {
                 // check if the process name we are on is in the new config
-                match config_access.programs.get(program_name) {
+                match config_access.programs.get_mut(program_name) {
                     // the program running is still in the config, so we just need to perform check
                     Some(program_config) => {
                         // keep only the good child AKA healthy child
@@ -214,7 +225,7 @@ impl ProcessManager {
                                 Err(error) => {
                                     log_error!(
                                         logger,
-                                        "error gotten while trying to read a child status"
+                                        "error gotten while trying to read a child status : {error}"
                                     );
                                     true // we keep 
                                 }
@@ -243,15 +254,63 @@ impl ProcessManager {
                                     {
                                         // we decrement the number of allowed restart for next time
                                         program_config.max_number_of_restart -= 1;
-
-                                        
-                                        // then we increment the number of time that this program should be restarted
-                                        match process_id_to_restart.get_mut(program_name.as_str()) {
-                                            Some(number) => *number += 1,
-                                            None => {
-                                                process_id_to_restart
-                                                    .insert(program_name.as_str(), 1);
-                                            }
+                                        // if there where an other process from the same program
+                                        if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
+                                            *old_number +=1;
+                                        } else {
+                                            // no ancient value so we insert one
+                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
+                                        }
+                                    }
+                                    // if there is an exit code and it contain in the normal exit code
+                                    else if exit_code.is_some() && program_config.expected_exit_code.contains(&exit_code.unwrap()) {
+                                        match program_config.auto_restart {
+                                            crate::config::AutoRestart::Always => {
+                                                if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
+                                            *old_number +=1;
+                                        } else {
+                                            // no ancient value so we insert one
+                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
+                                        }
+                                            },
+                                            // then it's normal it will just get removed
+                                            crate::config::AutoRestart::Unexpected => {},
+                                            // then it's normal it will just get removed
+                                            crate::config::AutoRestart::Never => {},
+                                        }
+                                    }
+                                    // if there is an exit code but it's not normal we need to figure out if we want to restart the program
+                                    else if exit_code.is_some() && !program_config.expected_exit_code.contains(&exit_code.unwrap()) {
+                                        match program_config.auto_restart {
+                                            crate::config::AutoRestart::Always => {
+                                                if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
+                                            *old_number +=1;
+                                        } else {
+                                            // no ancient value so we insert one
+                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
+                                        }
+                                            },
+                                            // we restart him too
+                                            crate::config::AutoRestart::Unexpected => {
+                                                if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
+                                            *old_number +=1;
+                                        } else {
+                                            // no ancient value so we insert one
+                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
+                                        }
+                                            },
+                                            // then it's normal it will just get removed
+                                            crate::config::AutoRestart::Never => {},
+                                        }
+                                    }
+                                    // no exit status code
+                                    else {
+                                        log_error!(logger, "Found a child with no exit status code in program: {program_name} adding it to the list for removal");
+                                        if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
+                                            *old_number +=1;
+                                        } else {
+                                            // no ancient value so we insert one
+                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
                                         }
                                     }
                                     false // we don't keep dead program
@@ -267,14 +326,24 @@ impl ProcessManager {
                 }
             });
 
-        for program in program_to_remove
+        // here we kill child that are not in the config anymore
+        for program in program_to_remove {
+            match self.shutdown_childs(&program, config, logger) {
+                Ok(_) => {
+                    // child will shutdown and or be remove in next iteration of this function
+                }
+                Err(error) => match error {
+                    KillingChildError::NoProgramFound => unreachable!(),
+                    KillingChildError::CantKillProcess => {
+                        log_error!(logger, "Can't kill a child of process: {program}: {error}");
+                    }
+                },
+            }
+        }
         // clean dead process from self
-        // self.remove_dead_process(logger);
         // killing all the program that must die
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
-
-        todo!()
     }
 
     async fn monitor(

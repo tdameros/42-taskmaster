@@ -26,7 +26,7 @@ pub struct Config {
 }
 
 /// represent all configuration of a monitored program
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
     #[serde(rename = "cmd", default)]
@@ -46,7 +46,7 @@ pub struct ProgramConfig {
 
     /// Which return codes represent an "expected" exit status
     #[serde(rename = "exitcodes", default)]
-    pub(super) expected_exit_code: Vec<u32>,
+    pub(super) expected_exit_code: Vec<i32>,
 
     /// How long the program should be running after it’s started for it to be considered "successfully started"
     #[serde(rename = "starttime", default)]
@@ -88,7 +88,7 @@ pub struct ProgramConfig {
 
 /// this enum represent whenever a program should be auto restart if it's termination
 /// has been detected
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub enum AutoRestart {
     #[serde(rename = "always")]
     Always,
@@ -104,7 +104,7 @@ pub enum AutoRestart {
 
 /// represent all the signal
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub enum Signal {
     SIGABRT,
     SIGALRM,
