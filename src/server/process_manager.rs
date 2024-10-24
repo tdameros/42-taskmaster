@@ -6,7 +6,7 @@ use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_error, log_info,
     logger::{Logger, SharedLogger},
-    running_process::RunningProcess,
+    running_process::{self, RunningProcess},
 };
 use std::{
     collections::HashMap,
@@ -340,9 +340,24 @@ impl ProcessManager {
                 },
             }
         }
+        // after this point self contain only running child, child in the shutdown phase, child were getting there status code returned an error and unkillable child
+        // so if we filter on child that do not have a time_since_shutdown we have the number of child that are running and we can compare it to the desire number
+        // to see if we need to kill additional child or start restarting the one we detected that we musted restart
 
         // remove excess program
-        
+        self.children.iter_mut().for_each(|(program_name, vec_running_program)| {
+            let number_of_non_stopping_process = vec_running_program.iter().filter(|running_process| {
+                running_process.has_received_shutdown_order()
+            }).count();
+            let overflowing_process_number = number_of_non_stopping_process - config_access.programs.get(program_name).expect("unreachable since we removed (AKA give a shutdown order) every program that didn't belong to the config anymore").number_of_process;
+            if overflowing_process_number > 0 {
+                // we need to shutdown the difference
+            } else if overflowing_process_number < 0 {
+                // we need to start restarting some program then start event more if it's not enough
+            } else {
+                // we have just the right number of process we don't need to do anything
+            }
+        });
         // handle the restarting program... if we know for a given program have less program to 
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
