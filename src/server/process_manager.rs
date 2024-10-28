@@ -309,8 +309,9 @@ impl ProcessManager {
                         .iter()
                         .filter(|running_process| !running_process.has_received_shutdown_order())
                         .count(); // this is the number of truly running process
-                    let mut overflowing_process_number =
-                        (number_of_non_stopping_process - config.number_of_process) as i64;
+                    let mut overflowing_process_number = (number_of_non_stopping_process as i64
+                        - config.number_of_process as i64)
+                        as i64;
                     match overflowing_process_number.cmp(&0) {
                         std::cmp::Ordering::Less => {
                             // we need to start restarting some program then start event more if it's not enough
