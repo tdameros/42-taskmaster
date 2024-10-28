@@ -9,13 +9,7 @@ use crate::{
     running_process::{self, RunningProcess},
 };
 use std::{
-    collections::HashMap,
-    error::Error,
-    fmt::Display,
-    process::Command,
-    sync::{Arc, RwLock},
-    thread,
-    time::{Duration, SystemTime},
+    collections::HashMap, error::Error, fmt::Display, ops::Neg, process::Command, sync::{Arc, RwLock}, thread, time::{Duration, SystemTime}
 };
 
 /* -------------------------------------------------------------------------- */
@@ -103,12 +97,9 @@ impl ProcessManager {
     pub(super) fn shutdown_childs(
         &mut self,
         name: &str,
-        config: &RwLock<Config>, // TODO use it
+        config: &Config, // TODO use it i've vonlonterly pass this as config and not rwlock for the monitor once function to not get lock since it lock in write and then call this function
         logger: &Logger,
     ) -> Result<(), KillingChildError> {
-        // lock the config for immutable access
-        let config_access = config.read().expect("One owner of this lock panicked");
-
         match self.children.get_mut(name) {
             // if the given program have running process we iterate over them and send to them the correct signal
             Some(processes) => {
@@ -120,7 +111,7 @@ impl ProcessManager {
                 we need to exit and warn the user that this did'nt go according to plan. we can't however
                 remove the process
                 */
-                match config_access.programs.get(name) {
+                match config.programs.get(name) {
                     Some(config) => {
                         // here we keep the process just sending them the signal required by the config
                         processes.iter_mut().for_each(|process| {
@@ -328,7 +319,7 @@ impl ProcessManager {
 
         // here we kill child that are not in the config anymore
         for program in program_to_remove {
-            match self.shutdown_childs(&program, config, logger) {
+            match self.shutdown_childs(&program, &config_access, logger) {
                 Ok(_) => {
                     // child will shutdown and or be remove in next iteration of this function
                 }
@@ -346,26 +337,34 @@ impl ProcessManager {
 
         // remove excess program
         self.children.iter_mut().for_each(|(program_name, vec_running_program)| {
-            let number_of_non_stopping_process = vec_running_program.iter().filter(|running_process| {
-                !running_process.has_received_shutdown_order()
-            }).count();
-            let config = config_access.programs.get(program_name);
-            let mut overflowing_process_number = (number_of_non_stopping_process - config_access.programs.get(program_name).expect("unreachable since we removed (AKA give a shutdown order) every program that didn't belong to the config anymore").number_of_process) as i64;
-            if overflowing_process_number > 0 {
-                // we need to shutdown the difference
-                while overflowing_process_number > 0 {
-                    vec_running_program.last_mut().expect("unreachable since we have at least one excess process and that the number of desire process is unsigned").send_signal(&config_access.programs.get(program_name).unwrap().stop_signal);
-                    overflowing_process_number -= 1;
+            // if the program have a config this is to prevent itering over child that can't be killed (killed because they was not in the config anymore)
+            if let Some(config) = config_access.programs.get(program_name) {
+                let number_of_non_stopping_process = vec_running_program.iter().filter(|running_process| {
+                    !running_process.has_received_shutdown_order()
+                }).count(); // this is the number of truly running process
+                let mut overflowing_process_number = (number_of_non_stopping_process - config.number_of_process) as i64;
+                if overflowing_process_number > 0 {
+                    // we need to shutdown the difference
+                    vec_running_program.iter_mut().rev().filter(|running_process| {
+                        !running_process.has_received_shutdown_order()
+                    }).for_each(|running_process| {
+                        if overflowing_process_number > 0 {
+                            running_process.send_signal(&config.stop_signal);
+                            overflowing_process_number -= 1;
+                        }
+                    });
+                } else if overflowing_process_number < 0 {
+                    // we need to start restarting some program then start event more if it's not enough
+                    
+                    // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
+                    match program_to_restart.get_mut(program_name) {
+                        Some((restart_number, _config)) => *restart_number = overflowing_process_number.neg(), // this become
+                        None => {program_to_restart.insert(program_name.to_owned(), (overflowing_process_number.neg(), config.to_owned()));},
+                    }
+                } else {
+                    // we have just the right number of process we don't need to do anything
                 }
-            } else if overflowing_process_number < 0 {
-                // we need to start restarting some program then start event more if it's not enough
-                // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
-                // match program_to_restart.get_mut(program_name) {
-                //     Some((restart_number, config)) => *restart_number = 0 - overflowing_process_number,
-                //     None => {program_to_restart.insert(program_name, (0 - overflowing_process_number, config_access.programs.get(program_name)));},
-                // }
-            } else {
-                // we have just the right number of process we don't need to do anything
+
             }
         });
         // handle the restarting program... if we know for a given program have less program to
