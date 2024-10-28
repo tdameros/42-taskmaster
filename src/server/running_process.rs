@@ -2,11 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{
-    marker::{self, PhantomData},
-    process::{Child, ExitStatus},
-    time::SystemTime,
-};
+use std::{process::Child, time::SystemTime};
 
 use crate::config::{ProgramConfig, Signal};
 
@@ -36,12 +32,6 @@ impl RunningProcess {
             started_since: SystemTime::now(),
             time_since_shutdown: None,
         }
-    }
-
-    /// return if the child is still alive or an error if one
-    /// occurred while trying to know if the child was alive
-    pub(super) fn is_alive(&mut self) -> Result<bool, std::io::Error> {
-        Ok(self.child.try_wait()?.is_some())
     }
 
     /// try to return the child exit code if some is found,
@@ -74,7 +64,7 @@ impl RunningProcess {
                     < SystemTime::now()
                         .duration_since(time_since_shutdown)
                         .unwrap_or_default()
-                        .as_secs() as u64
+                        .as_secs()
             })
             .unwrap_or(false)
     }

@@ -2,10 +2,12 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use std::{thread::sleep, time::Duration};
+
 use crate::process_manager::SharedProcessManager;
 use config::{Config, SharedConfig};
 use logger::{new_shared_logger, SharedLogger};
-use process_manager::new_shared_process_manager;
+use process_manager::{new_shared_process_manager, ProcessManager};
 use tcl::message::{receive, Request};
 use tokio::net::{TcpListener, TcpStream};
 /* -------------------------------------------------------------------------- */
@@ -38,6 +40,31 @@ async fn main() {
     let listener = TcpListener::bind(tcl::SOCKET_ADDRESS)
         .await
         .expect("Failed to bind tcp listener");
+
+    // start the process monitoring
+    let _monitoring_handle; // in case we need it
+    loop {
+        match ProcessManager::monitor(
+            shared_process_manager.clone(),
+            shared_config.clone(),
+            shared_logger.clone(),
+            Duration::from_secs(1),
+        )
+        .await
+        {
+            Ok(handle) => {
+                _monitoring_handle = handle;
+                break;
+            }
+            Err(error) => {
+                log_error!(
+                    shared_logger,
+                    "Can't spawn monitoring thread: {error}, retrying in 5 second"
+                );
+                sleep(Duration::from_secs(5));
+            }
+        }
+    }
 
     // handle the client connection
     loop {
@@ -170,7 +197,7 @@ impl ClientHandler {
             .get(&name)
         {
             Some(config) => {
-                manager.spawn_program(&name, &config, &shared_logger);
+                manager.spawn_program(&name, config, &shared_logger);
                 // TODO: Implement response ACK
             }
             None => {

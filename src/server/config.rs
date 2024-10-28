@@ -88,7 +88,7 @@ pub struct ProgramConfig {
 
 /// this enum represent whenever a program should be auto restart if it's termination
 /// has been detected
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub enum AutoRestart {
     #[serde(rename = "always")]
     Always,
@@ -152,5 +152,14 @@ impl Config {
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
+    }
+}
+
+impl ProgramConfig {
+    pub(super) fn should_restart(&self, exit_code: i32) -> bool {
+        match self.expected_exit_code.contains(&exit_code) {
+            true => self.auto_restart == AutoRestart::Always,
+            false => self.auto_restart != AutoRestart::Never,
+        }
     }
 }

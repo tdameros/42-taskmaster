@@ -6,10 +6,17 @@ use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_error, log_info,
     logger::{Logger, SharedLogger},
-    running_process::{self, RunningProcess},
+    running_process::RunningProcess,
 };
 use std::{
-    collections::HashMap, error::Error, fmt::Display, ops::Neg, process::Command, sync::{Arc, RwLock}, thread, time::{Duration, SystemTime}
+    collections::HashMap,
+    error::Error,
+    fmt::Display,
+    ops::{Deref, DerefMut, Neg},
+    process::Command,
+    sync::{Arc, RwLock},
+    thread::{self, JoinHandle},
+    time::Duration,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -25,29 +32,29 @@ pub(super) struct ProcessManager {
 /// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
 pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
 
-#[derive(Debug)]
-pub(super) enum KillingChildError {
-    NoProgramFound,
-    CantKillProcess,
-}
-
-impl Error for KillingChildError {}
-
-impl Display for KillingChildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl From<std::io::Error> for KillingChildError {
-    fn from(_: std::io::Error) -> Self {
-        KillingChildError::CantKillProcess
-    }
-}
+/// exist simply for an ease of implementation
+#[derive(Debug, Default)]
+struct ProgramToRestart(pub HashMap<String, (i64, ProgramConfig)>);
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
+impl ProgramToRestart {
+    fn add_or_increment(&mut self, program_name: &String, program_config: &ProgramConfig) {
+        match self.0.get_mut(program_name) {
+            Some((old_number, _)) => {
+                // there where an other process from the same program
+                *old_number += 1;
+            }
+            None => {
+                // no ancient value so we insert one
+                self.0
+                    .insert(program_name.to_owned(), (1, program_config.to_owned()));
+            }
+        }
+    }
+}
+
 impl ProcessManager {
     /// return a new ProcessManager
     fn new_from_config(config: &RwLock<Config>, logger: &Logger) -> Self {
@@ -80,7 +87,7 @@ impl ProcessManager {
         // for each process that must be spawn we spawned it using the given argument
         for process_number in 0..program_config.number_of_process {
             // if the child can't be spawn the command is probably wrong or the privilege is not right we cannot do anything,
-            // retrying would be useless sor we just log the error and go to the next which will probably fail too
+            // retrying would be useless so we just log the error and go to the next which will probably fail too
             if let Err(error) = self.spawn_child(program_config, program_name) {
                 log_error!(
                     logger,
@@ -89,6 +96,48 @@ impl ProcessManager {
                 );
             }
         }
+    }
+
+    /// this function spawn a child given the program config for a program it then insert a newly created
+    /// running process struct into the vec of running process for the given program name in self,
+    /// creating it if it doesn't exist yet
+    fn spawn_child(
+        &mut self,
+        program_config: &ProgramConfig,
+        name: &str,
+    ) -> Result<(), std::io::Error> {
+        // get the command and arguments
+        let split_command: Vec<&str> = program_config.command.split_whitespace().collect();
+
+        if !split_command.is_empty() {
+            // create the command using the command property given by the program config
+            let mut tmp_child = Command::new(split_command.first().expect("Unreachable"));
+
+            // TODO change the pwd according to the config
+
+            // TODO add env variable
+
+            // adding arguments if there are any in the command section of program config
+            if split_command.len() > 1 {
+                tmp_child.args(&split_command[1..]);
+            }
+
+            // TODO stdout and err redirection
+
+            // spawn the child returning if failed
+            let child = tmp_child.spawn()?;
+
+            // create a instance of running process with the info of this given child
+            let process = RunningProcess::new(child);
+
+            // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
+            self.children
+                .entry(name.to_string())
+                .or_default()
+                .push(process);
+        }
+
+        Ok(())
     }
 
     /// shutdown all child of a given process if no child exist for the given program name the function does nothing
@@ -151,47 +200,6 @@ impl ProcessManager {
         // here we don't remove the entry since the monitor will do it for use
     }
 
-    /// this function spawn a child given the program config for a program it then insert a newly created
-    /// running process struct into the vec of running process for the given program name in self,
-    /// creating it if it doesn't exist yet
-    fn spawn_child(
-        &mut self,
-        program_config: &ProgramConfig,
-        name: &str,
-    ) -> Result<(), std::io::Error> {
-        let split_command: Vec<&str> = program_config.command.split_whitespace().collect();
-
-        if split_command.len() > 0 {
-            //create the command using the command property given by the program config
-            let mut tmp_child = Command::new(split_command.first().expect("Unreachable"));
-
-            // TODO change the pwd according to the config
-
-            // TODO add env variable
-
-            // adding arguments if there are any in the command section of program config
-            if split_command.len() > 1 {
-                tmp_child.args(&split_command[1..]);
-            }
-
-            // TODO stdout and err redirection
-
-            // spawn the child returning if failed
-            let child = tmp_child.spawn()?;
-
-            // create a instance of running process with the info of this given child
-            let process = RunningProcess::new(child);
-
-            // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
-            self.children
-                .entry(name.to_string())
-                .or_default()
-                .push(process);
-        }
-
-        Ok(())
-    }
-
     /// do one round of monitoring
     fn monitor_once(&mut self, config: &RwLock<Config>, logger: &Logger) {
         // query the new config
@@ -200,7 +208,7 @@ impl ProcessManager {
             .expect("Some user of the config lock has panicked");
 
         let mut program_to_remove = Vec::new();
-        let mut program_to_restart = HashMap::<String, (i64, ProgramConfig)>::new();
+        let mut program_to_restart = ProgramToRestart::default();
 
         // iterate over all process
         self.children
@@ -240,68 +248,24 @@ impl ProcessManager {
                                     // the program is dead
                                     // we need to check if the program should be restarted
                                     // first we need to check if the process is dead while starting
-                                    if running_process.program_was_running(program_config)
+                                    if !running_process.program_was_running(program_config)
                                         && program_config.max_number_of_restart > 0
                                     {
                                         // we decrement the number of allowed restart for next time
                                         program_config.max_number_of_restart -= 1;
-                                        // if there where an other process from the same program
-                                        if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
-                                            *old_number +=1;
-                                        } else {
-                                            // no ancient value so we insert one
-                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
-                                        }
-                                    }
-                                    // if there is an exit code and it contain in the normal exit code
-                                    else if exit_code.is_some() && program_config.expected_exit_code.contains(&exit_code.unwrap()) {
-                                        match program_config.auto_restart {
-                                            crate::config::AutoRestart::Always => {
-                                                if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
-                                            *old_number +=1;
-                                        } else {
-                                            // no ancient value so we insert one
-                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
-                                        }
+                                        program_to_restart.add_or_increment(program_name, program_config);
+                                    } else {
+                                        match exit_code {
+                                            // if there is an exit code we ask the config to see if we need to restart the program
+                                            Some(exit_code) => {
+                                                if program_config.should_restart(exit_code) {
+                                                    program_to_restart.add_or_increment(program_name, program_config);
+                                                }
                                             },
-                                            // then it's normal it will just get removed
-                                            crate::config::AutoRestart::Unexpected => {},
-                                            // then it's normal it will just get removed
-                                            crate::config::AutoRestart::Never => {},
-                                        }
-                                    }
-                                    // if there is an exit code but it's not normal we need to figure out if we want to restart the program
-                                    else if exit_code.is_some() && !program_config.expected_exit_code.contains(&exit_code.unwrap()) {
-                                        match program_config.auto_restart {
-                                            crate::config::AutoRestart::Always => {
-                                                if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
-                                            *old_number +=1;
-                                        } else {
-                                            // no ancient value so we insert one
-                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
-                                        }
+                                            // if no exit code we log the error
+                                            None => {
+                                                log_error!(logger, "Found a child with no exit status code in program: {program_name} adding it to the list for removal");
                                             },
-                                            // we restart him too
-                                            crate::config::AutoRestart::Unexpected => {
-                                                if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
-                                            *old_number +=1;
-                                        } else {
-                                            // no ancient value so we insert one
-                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
-                                        }
-                                            },
-                                            // then it's normal it will just get removed
-                                            crate::config::AutoRestart::Never => {},
-                                        }
-                                    }
-                                    // no exit status code
-                                    else {
-                                        log_error!(logger, "Found a child with no exit status code in program: {program_name} adding it to the list for removal");
-                                        if let Some((old_number, _)) = program_to_restart.get_mut(program_name) {
-                                            *old_number +=1;
-                                        } else {
-                                            // no ancient value so we insert one
-                                            program_to_restart.insert(program_name.to_owned(), (1, program_config.to_owned()));
                                         }
                                     }
                                     false // we don't keep dead program
@@ -336,48 +300,76 @@ impl ProcessManager {
         // to see if we need to kill additional child or start restarting the one we detected that we musted restart
 
         // remove excess program
-        self.children.iter_mut().for_each(|(program_name, vec_running_program)| {
-            // if the program have a config this is to prevent itering over child that can't be killed (killed because they was not in the config anymore)
-            if let Some(config) = config_access.programs.get(program_name) {
-                let number_of_non_stopping_process = vec_running_program.iter().filter(|running_process| {
-                    !running_process.has_received_shutdown_order()
-                }).count(); // this is the number of truly running process
-                let mut overflowing_process_number = (number_of_non_stopping_process - config.number_of_process) as i64;
-                if overflowing_process_number > 0 {
-                    // we need to shutdown the difference
-                    vec_running_program.iter_mut().rev().filter(|running_process| {
-                        !running_process.has_received_shutdown_order()
-                    }).for_each(|running_process| {
-                        if overflowing_process_number > 0 {
-                            running_process.send_signal(&config.stop_signal);
-                            overflowing_process_number -= 1;
-                        }
-                    });
-                } else if overflowing_process_number < 0 {
-                    // we need to start restarting some program then start event more if it's not enough
-                    
-                    // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
-                    match program_to_restart.get_mut(program_name) {
-                        Some((restart_number, _config)) => *restart_number = overflowing_process_number.neg(), // this become
-                        None => {program_to_restart.insert(program_name.to_owned(), (overflowing_process_number.neg(), config.to_owned()));},
-                    }
-                } else {
-                    // we have just the right number of process we don't need to do anything
-                }
+        self.children
+            .iter_mut()
+            .for_each(|(program_name, vec_running_program)| {
+                // if the program have a config this is to prevent itering over child that can't be killed (killed because they was not in the config anymore)
+                if let Some(config) = config_access.programs.get(program_name) {
+                    let number_of_non_stopping_process = vec_running_program
+                        .iter()
+                        .filter(|running_process| !running_process.has_received_shutdown_order())
+                        .count(); // this is the number of truly running process
+                    let mut overflowing_process_number =
+                        (number_of_non_stopping_process - config.number_of_process) as i64;
+                    match overflowing_process_number.cmp(&0) {
+                        std::cmp::Ordering::Less => {
+                            // we need to start restarting some program then start event more if it's not enough
 
-            }
-        });
-        // handle the restarting program... if we know for a given program have less program to
-        // check for each program the number of running child if too many kill them else spawn them
-        // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
+                            // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
+                            match program_to_restart.get_mut(program_name) {
+                                Some((restart_number, _config)) => {
+                                    *restart_number = overflowing_process_number.neg()
+                                } // this become
+                                None => {
+                                    program_to_restart.insert(
+                                        program_name.to_owned(),
+                                        (overflowing_process_number.neg(), config.to_owned()),
+                                    );
+                                }
+                            }
+                        }
+                        std::cmp::Ordering::Equal => {
+                            // we have just the right number of process we don't need to do anything
+                        }
+                        std::cmp::Ordering::Greater => {
+                            // we need to shutdown the difference
+                            vec_running_program
+                                .iter_mut()
+                                .rev()
+                                .filter(|running_process| {
+                                    !running_process.has_received_shutdown_order()
+                                })
+                                .for_each(|running_process| {
+                                    if overflowing_process_number > 0 {
+                                        running_process.send_signal(&config.stop_signal);
+                                        overflowing_process_number -= 1;
+                                    }
+                                });
+                        }
+                    };
+                }
+            });
+
+        // restart the program
+        program_to_restart.0.iter().for_each(
+            |(program_name, (number_of_process, program_config))| {
+                for _ in 0..*number_of_process {
+                    if let Err(error) = self.spawn_child(program_config, program_name) {
+                        log_error!(logger, "Can't spawn child of {program_name}: {error}");
+                    }
+                }
+            },
+        );
     }
 
-    async fn monitor(
+    /// this function spawn a thread the will monitor all process launch in self, refreshing every refresh_period
+    pub(super) async fn monitor(
         shared_process_manager: SharedProcessManager,
         shared_config: SharedConfig,
         shared_logger: SharedLogger,
-    ) {
-        thread::spawn(move || loop {
+        refresh_period: Duration,
+    ) -> Result<JoinHandle<()>, std::io::Error> {
+        thread::Builder::new().spawn(move || loop {
             {
                 shared_process_manager
                     .write()
@@ -385,8 +377,8 @@ impl ProcessManager {
                     .monitor_once(&shared_config, &shared_logger);
             }
 
-            thread::sleep(Duration::from_secs(1));
-        });
+            thread::sleep(refresh_period);
+        })
     }
 }
 
@@ -395,4 +387,41 @@ pub(super) fn new_shared_process_manager(
     logger: &Logger,
 ) -> SharedProcessManager {
     Arc::new(RwLock::new(ProcessManager::new_from_config(config, logger)))
+}
+
+impl Deref for ProgramToRestart {
+    type Target = HashMap<String, (i64, ProgramConfig)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ProgramToRestart {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    Error                                   */
+/* -------------------------------------------------------------------------- */
+#[derive(Debug)]
+pub(super) enum KillingChildError {
+    NoProgramFound,
+    CantKillProcess,
+}
+
+impl Error for KillingChildError {}
+
+impl Display for KillingChildError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl From<std::io::Error> for KillingChildError {
+    fn from(_: std::io::Error) -> Self {
+        KillingChildError::CantKillProcess
+    }
 }
