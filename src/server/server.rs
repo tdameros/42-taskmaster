@@ -2,7 +2,10 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{thread::sleep, time::Duration};
+use std::{
+    thread::{sleep, JoinHandle},
+    time::Duration,
+};
 
 use crate::process_manager::SharedProcessManager;
 use config::{Config, SharedConfig};
@@ -42,29 +45,11 @@ async fn main() {
         .expect("Failed to bind tcp listener");
 
     // start the process monitoring
-    let _monitoring_handle; // in case we need it
-    loop {
-        match ProcessManager::monitor(
-            shared_process_manager.clone(),
-            shared_config.clone(),
-            shared_logger.clone(),
-            Duration::from_secs(1),
-        )
-        .await
-        {
-            Ok(handle) => {
-                _monitoring_handle = handle;
-                break;
-            }
-            Err(error) => {
-                log_error!(
-                    shared_logger,
-                    "Can't spawn monitoring thread: {error}, retrying in 5 second"
-                );
-                sleep(Duration::from_secs(5));
-            }
-        }
-    }
+    let _monitoring_handle = start_monitor(
+        shared_process_manager.clone(),
+        shared_config.clone(),
+        shared_logger.clone(),
+    ); // in case we need it
 
     // handle the client connection
     loop {
@@ -81,6 +66,34 @@ async fn main() {
             }
             Err(error) => {
                 log_error!(shared_logger, "{}", format!("Accepting Client: {error}"));
+            }
+        }
+    }
+}
+
+async fn start_monitor(
+    shared_process_manager: SharedProcessManager,
+    shared_config: SharedConfig,
+    shared_logger: SharedLogger,
+) -> JoinHandle<()> {
+    loop {
+        match ProcessManager::monitor(
+            shared_process_manager.clone(),
+            shared_config.clone(),
+            shared_logger.clone(),
+            Duration::from_secs(1),
+        )
+        .await
+        {
+            Ok(handle) => {
+                return handle;
+            }
+            Err(error) => {
+                log_error!(
+                    shared_logger,
+                    "Can't spawn monitoring thread: {error}, retrying in 5 second"
+                );
+                sleep(Duration::from_secs(5));
             }
         }
     }
