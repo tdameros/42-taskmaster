@@ -2,17 +2,15 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{
-    marker::{self, PhantomData},
-    process::{Child, ExitStatus},
-    time::SystemTime,
-};
+use std::{process::Child, time::SystemTime};
 
 use crate::config::{ProgramConfig, Signal};
+use tcl::message::ProcessStatus;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
+
 #[derive(Debug)]
 pub(super) struct RunningProcess {
     // the handle to the process
@@ -23,6 +21,8 @@ pub(super) struct RunningProcess {
 
     // use to determine when to abort the child
     time_since_shutdown: Option<SystemTime>,
+
+    status: ProcessStatus,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -35,6 +35,7 @@ impl RunningProcess {
             child,
             started_since: SystemTime::now(),
             time_since_shutdown: None,
+            status: ProcessStatus::STOPPED,
         }
     }
 
@@ -98,5 +99,21 @@ impl RunningProcess {
     pub(super) fn send_signal(&mut self, signal: &Signal) {
         // TODO use signal or other mean to send the correct signal
         self.time_since_shutdown = Some(SystemTime::now());
+    }
+
+    pub(super) fn get_status(&self) -> ProcessStatus {
+        self.status.clone()
+    }
+    
+    pub(super) fn set_status(&mut self, status: ProcessStatus) {
+        self.status = status;
+    }
+
+    pub(super) fn get_start_time(&self) -> SystemTime {
+        self.started_since
+    }
+
+    pub(super) fn get_shutdown_time(&self) -> SystemTime {
+        self.time_since_shutdown.unwrap_or(SystemTime::now())
     }
 }

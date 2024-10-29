@@ -3,12 +3,13 @@
 /* -------------------------------------------------------------------------- */
 
 use std::ops::Deref;
+use std::time::{Duration, SystemTime};
+use tcl::message::{receive, ProcessState, ProcessStatus, Response};
 use tcl::{
     error::TaskmasterError,
     message::{send, Request},
 };
 use tokio::net::TcpStream;
-
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
@@ -82,7 +83,19 @@ impl CliCommand {
                 Ok(())
             }
             CliCommand::Request(request) => {
-                Ok(CliCommand::forward_to_server(request, stream).await?)
+                CliCommand::forward_to_server(request, stream).await?;
+                let response: Result<Response, TaskmasterError> = receive(stream).await;
+                match response {
+                    Ok(result) => match result {
+                        Response::Success(msg) => println!("{msg}"),
+                        Response::Error(msg) => println!("ERROR: {msg}"),
+                        Response::Status(processes) => Self::display_status(&processes),
+                    },
+                    Err(error) => {
+                        println!("{error}");
+                    }
+                }
+                Ok(())
             }
         }
     }
@@ -116,5 +129,49 @@ impl CliCommand {
     ) -> Result<(), TaskmasterError> {
         send(stream, request).await?;
         Ok(())
+    }
+
+    fn display_status(processes: &Vec<ProcessState>) {
+        for process in processes {
+            match process.status.clone() {
+                ProcessStatus::RUNNING => {
+                    let uptime = SystemTime::now()
+                        .duration_since(process.start_time)
+                        .expect("");
+                    println!(
+                        "{}\t\t{:?}\t\tpid {}, uptime {}",
+                        process.name,
+                        process.status,
+                        process.pid,
+                        Self::format_duration(uptime)
+                    );
+                }
+                ProcessStatus::STOPPED => {
+                    let uptime = SystemTime::now()
+                        .duration_since(process.shutdown_time)
+                        .expect("");
+                    println!(
+                        "{}\t\t{:?}\t\tsince {}",
+                        process.name,
+                        process.status,
+                        Self::format_duration(uptime)
+                    );
+                }
+                ProcessStatus::STARTING => {
+                    println!("{}\t\t{:?}", process.name, process.status);
+                }
+                ProcessStatus::FATAL(error) => {
+                    println!("{}\t\t{:?} ({})", process.name, process.status, error);
+                }
+            }
+        }
+    }
+
+    fn format_duration(duration: Duration) -> String {
+        let secs = duration.as_secs();
+        let hours = secs / 3600;
+        let minutes = (secs % 3600) / 60;
+        let seconds = secs % 60;
+        format!("{}:{:02}:{:02}", hours, minutes, seconds)
     }
 }

@@ -6,12 +6,19 @@ use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_error, log_info,
     logger::{Logger, SharedLogger},
-    running_process::{self, RunningProcess},
+    running_process::RunningProcess,
 };
 use std::{
-    collections::HashMap, error::Error, fmt::Display, ops::Neg, process::Command, sync::{Arc, RwLock}, thread, time::{Duration, SystemTime}
+    collections::HashMap,
+    error::Error,
+    fmt::Display,
+    ops::Neg,
+    process::Command,
+    sync::{Arc, RwLock},
+    thread,
+    time::{Duration},
 };
-
+use tcl::message::{ProcessState, ProcessStatus};
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
@@ -121,6 +128,7 @@ impl ProcessManager {
                                 process.get_child_id()
                             );
                             process.send_signal(&config.stop_signal);
+                            process.set_status(ProcessStatus::STOPPED);
                         });
                         Ok(())
                     }
@@ -134,6 +142,7 @@ impl ProcessManager {
                                 process.get_child_id()
                             );
                             process.kill()?;
+                            process.set_status(ProcessStatus::STOPPED);
                         }
                         Ok(())
                     }
@@ -180,7 +189,8 @@ impl ProcessManager {
             let child = tmp_child.spawn()?;
 
             // create a instance of running process with the info of this given child
-            let process = RunningProcess::new(child);
+            let mut process = RunningProcess::new(child);
+            process.set_status(ProcessStatus::RUNNING);
 
             // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
             self.children
@@ -336,37 +346,51 @@ impl ProcessManager {
         // to see if we need to kill additional child or start restarting the one we detected that we musted restart
 
         // remove excess program
-        self.children.iter_mut().for_each(|(program_name, vec_running_program)| {
-            // if the program have a config this is to prevent itering over child that can't be killed (killed because they was not in the config anymore)
-            if let Some(config) = config_access.programs.get(program_name) {
-                let number_of_non_stopping_process = vec_running_program.iter().filter(|running_process| {
-                    !running_process.has_received_shutdown_order()
-                }).count(); // this is the number of truly running process
-                let mut overflowing_process_number = (number_of_non_stopping_process - config.number_of_process) as i64;
-                if overflowing_process_number > 0 {
-                    // we need to shutdown the difference
-                    vec_running_program.iter_mut().rev().filter(|running_process| {
-                        !running_process.has_received_shutdown_order()
-                    }).for_each(|running_process| {
-                        if overflowing_process_number > 0 {
-                            running_process.send_signal(&config.stop_signal);
-                            overflowing_process_number -= 1;
-                        }
-                    });
-                } else if overflowing_process_number < 0 {
-                    // we need to start restarting some program then start event more if it's not enough
-                    
-                    // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
-                    match program_to_restart.get_mut(program_name) {
-                        Some((restart_number, _config)) => *restart_number = overflowing_process_number.neg(), // this become
-                        None => {program_to_restart.insert(program_name.to_owned(), (overflowing_process_number.neg(), config.to_owned()));},
-                    }
-                } else {
-                    // we have just the right number of process we don't need to do anything
-                }
+        self.children
+            .iter_mut()
+            .for_each(|(program_name, vec_running_program)| {
+                // if the program have a config this is to prevent itering over child that can't be killed (killed because they was not in the config anymore)
+                if let Some(config) = config_access.programs.get(program_name) {
+                    let number_of_non_stopping_process = vec_running_program
+                        .iter()
+                        .filter(|running_process| !running_process.has_received_shutdown_order())
+                        .count(); // this is the number of truly running process
+                    let mut overflowing_process_number =
+                        (number_of_non_stopping_process - config.number_of_process) as i64;
+                    if overflowing_process_number > 0 {
+                        // we need to shutdown the difference
+                        vec_running_program
+                            .iter_mut()
+                            .rev()
+                            .filter(|running_process| {
+                                !running_process.has_received_shutdown_order()
+                            })
+                            .for_each(|running_process| {
+                                if overflowing_process_number > 0 {
+                                    running_process.send_signal(&config.stop_signal);
+                                    overflowing_process_number -= 1;
+                                }
+                            });
+                    } else if overflowing_process_number < 0 {
+                        // we need to start restarting some program then start event more if it's not enough
 
-            }
-        });
+                        // we need to store the true restart number since we can call a &mut self method in a iter_mut block for very good reason ^^ think about it
+                        match program_to_restart.get_mut(program_name) {
+                            Some((restart_number, _config)) => {
+                                *restart_number = overflowing_process_number.neg()
+                            } // this become
+                            None => {
+                                program_to_restart.insert(
+                                    program_name.to_owned(),
+                                    (overflowing_process_number.neg(), config.to_owned()),
+                                );
+                            }
+                        }
+                    } else {
+                        // we have just the right number of process we don't need to do anything
+                    }
+                }
+            });
         // handle the restarting program... if we know for a given program have less program to
         // check for each program the number of running child if too many kill them else spawn them
         // le coup des changement des redirection stdout et err je ne voie pas comment faire autrement que garder un copie de la config d'avant pour voir si changement et si changement soit on peut changer a la voler soit changer ne coute rien et donc on peut le faire peu importe, soit on ne peut pas changer mais ca m'etonnerais beaucoup beacoup, la question c'est plus esqu'on sait sur quoi le stdout est rediriger la maintenant, si on peu savoir alors on peut check et changer en fonction, si ca ne coute rien on peut passer sur tous et just actualiser
@@ -387,6 +411,28 @@ impl ProcessManager {
 
             thread::sleep(Duration::from_secs(1));
         });
+    }
+
+    pub fn get_running_children(&mut self) -> Vec<ProcessState> {
+        let mut result: Vec<ProcessState> = vec![];
+        for (name, childs) in self.children.iter() {
+            for (index, child) in childs.iter().enumerate() {
+                let name = if childs.len() <= 1 {
+                    name.clone()
+                } else {
+                    format!("{name}{index}")
+                };
+                let process_status = ProcessState {
+                    name: name.clone(),
+                    pid: child.get_child_id(),
+                    status: child.get_status(),
+                    start_time: child.get_start_time(),
+                    shutdown_time: child.get_shutdown_time(),
+                };
+                result.push(process_status);
+            }
+        }
+        result
     }
 }
 
