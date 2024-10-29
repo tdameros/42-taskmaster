@@ -26,43 +26,44 @@ pub struct Config {
 }
 
 /// represent all configuration of a monitored program
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
     #[serde(rename = "cmd", default)]
-    command: String,
+    pub(super) command: String,
 
     /// The number of processes to start and keep running
     #[serde(rename = "numprocs", default)]
-    number_of_process: u32,
+    pub(super) number_of_process: usize,
 
     /// Whether to start this program at launch or not
     #[serde(rename = "autostart", default)]
-    start_at_launch: bool,
+    pub(super) start_at_launch: bool,
 
     /// Whether the program should be restarted always, never, or on unexpected exits only
     #[serde(rename = "autorestart", default)]
-    auto_restart: AutoRestart,
+    pub(super) auto_restart: AutoRestart,
 
     /// Which return codes represent an "expected" exit status
     #[serde(rename = "exitcodes", default)]
-    expected_exit_code: Vec<u32>,
+    pub(super) expected_exit_code: Vec<i32>,
 
     /// How long the program should be running after it’s started for it to be considered "successfully started"
     #[serde(rename = "starttime", default)]
-    time_to_start: u32,
+    pub(super) time_to_start: u64,
 
     /// How many times a restart should be attempted before aborting
+    /// this is shared between replica
     #[serde(rename = "startretries", default)]
-    max_number_of_restart: u32,
+    pub(super) max_number_of_restart: u32,
 
     /// Which signal should be used to stop (i.e. exit gracefully) the program
     #[serde(rename = "stopsignal", default)]
-    stop_signal: Signal,
+    pub(super) stop_signal: Signal,
 
     /// How long to wait after a graceful stop before killing the program
     #[serde(rename = "stoptime", default)]
-    time_to_stop_gracefully: u32,
+    pub(super) time_to_stop_gracefully: u64,
 
     /// Optional stdout redirection
     #[serde(rename = "stdout", default)]
@@ -87,7 +88,7 @@ pub struct ProgramConfig {
 
 /// this enum represent whenever a program should be auto restart if it's termination
 /// has been detected
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub enum AutoRestart {
     #[serde(rename = "always")]
     Always,
@@ -103,7 +104,7 @@ pub enum AutoRestart {
 
 /// represent all the signal
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub enum Signal {
     SIGABRT,
     SIGALRM,
@@ -151,5 +152,14 @@ impl Config {
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
+    }
+}
+
+impl ProgramConfig {
+    pub(super) fn should_restart(&self, exit_code: i32) -> bool {
+        match self.expected_exit_code.contains(&exit_code) {
+            true => self.auto_restart == AutoRestart::Always,
+            false => self.auto_restart != AutoRestart::Never,
+        }
     }
 }
