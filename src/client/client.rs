@@ -2,16 +2,18 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use command::CliCommand;
-use std::io::{self, stdin, Write};
+use cli::Cli;
+use command::Command;
 use tcl::SOCKET_ADDRESS;
 use tokio::net::TcpStream;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
-mod command;
 
+mod cli;
+mod command;
+mod history;
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
 /* -------------------------------------------------------------------------- */
@@ -23,32 +25,36 @@ async fn main() {
     let mut stream = TcpStream::connect(SOCKET_ADDRESS)
         .await
         .expect("Can't Connect to the server");
-    CliCommand::help(); // display the cli manual
-
-    // the actual cli
+    Command::help(); // display the cli manual
+    let mut shell = Cli::new();
     loop {
-        // terminal prompt
-        print!("> ");
-        io::stdout().flush().expect("Error while flushing stdout");
-
-        // acquiring user input
-        let mut user_input = String::new();
-        if let Err(input_error) = stdin().read_line(&mut user_input) {
-            eprintln!("Error Occurred while reading user input: {input_error}, please close the terminal and restart the client");
-            return; // we need to close the program if this happen
+        match shell.read_line() {
+            Ok(user_input) => {
+                process_user_input(user_input, &mut stream).await;
+            }
+            Err(error) => {
+                eprintln!("Error reading line: {}", error);
+                return;
+            }
         }
-        let trimmed_user_input = user_input.trim().to_owned();
+    }
+}
 
-        // executing the client order
-        match CliCommand::from_client_input(trimmed_user_input.as_str()) {
-            Ok(command) => {
-                if let Err(error) = command.execute(&mut stream).await {
-                    eprintln!("error while executing command: {error}");
-                }
+async fn process_user_input(user_input: String, stream: &mut TcpStream) {
+    let trimmed_user_input = user_input.trim().to_owned();
+
+    if trimmed_user_input.is_empty() {
+        return;
+    }
+
+    match Command::from_client_input(trimmed_user_input.as_str()) {
+        Ok(command) => {
+            if let Err(error) = command.execute(stream).await {
+                eprintln!("Error while executing command: {error}");
             }
-            Err(e) => {
-                eprintln!("error while parsing command: {e}, tap 'help' for more info about available command or exit to 'close'");
-            }
-        };
+        }
+        Err(error) => {
+            eprintln!("Error while parsing command: {error}. Type 'help' for more info or 'exit' to close.");
+        }
     }
 }

@@ -39,12 +39,6 @@ impl RunningProcess {
         }
     }
 
-    /// return if the child is still alive or an error if one
-    /// occurred while trying to know if the child was alive
-    pub(super) fn is_alive(&mut self) -> Result<bool, std::io::Error> {
-        Ok(self.child.try_wait()?.is_some())
-    }
-
     /// try to return the child exit code if some is found,
     /// an error is returned if the exist status could not be read
     /// if the child is alive Ok(None) is return
@@ -75,7 +69,7 @@ impl RunningProcess {
                     < SystemTime::now()
                         .duration_since(time_since_shutdown)
                         .unwrap_or_default()
-                        .as_secs() as u64
+                        .as_secs()
             })
             .unwrap_or(false)
     }
@@ -96,7 +90,7 @@ impl RunningProcess {
     }
 
     /// send the given signal to the child, starting the gracefully shutdown timer
-    pub(super) fn send_signal(&mut self, signal: &Signal) {
+    pub(super) fn send_signal(&mut self, _signal: &Signal) {
         // TODO use signal or other mean to send the correct signal
         self.time_since_shutdown = Some(SystemTime::now());
     }
@@ -104,7 +98,7 @@ impl RunningProcess {
     pub(super) fn get_status(&self) -> ProcessStatus {
         self.status.clone()
     }
-    
+
     pub(super) fn set_status(&mut self, status: ProcessStatus) {
         self.status = status;
     }

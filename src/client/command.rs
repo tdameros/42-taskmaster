@@ -14,16 +14,16 @@ use tokio::net::TcpStream;
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
 /// this enum represent the set of all possible command that the client can receive
-pub enum CliCommand {
+pub enum Command {
     Request(Request),
     Exit,
     Help,
 }
 
-impl CliCommand {
+impl Command {
     /// Try to produce a CliCommand enum based on the user input,
     /// returning the appropriate error if enable
-    pub fn from_client_input(user_input: &str) -> Result<CliCommand, TaskmasterError> {
+    pub fn from_client_input(user_input: &str) -> Result<Command, TaskmasterError> {
         // collect the user input into a vector for ease of processing
         let arguments: Vec<&str> = user_input.split_ascii_whitespace().collect();
 
@@ -50,10 +50,10 @@ impl CliCommand {
         let cli_command = if arguments.len() == 1 {
             // try to match against command that need no argument
             match command.deref() {
-                "exit" => CliCommand::Exit,
-                "help" => CliCommand::Help,
-                "status" => CliCommand::Request(Request::Status),
-                "reload" => CliCommand::Request(Request::Reload),
+                "exit" => Command::Exit,
+                "help" => Command::Help,
+                "status" => Command::Request(Request::Status),
+                "reload" => Command::Request(Request::Reload),
                 _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
             }
         } else {
@@ -61,9 +61,9 @@ impl CliCommand {
             let argument = arguments.get(1).expect("unreachable").to_ascii_lowercase();
             // try to match against command that require one argument
             match command.deref() {
-                "start" => CliCommand::Request(Request::Start(argument.to_owned())),
-                "stop" => CliCommand::Request(Request::Stop(argument.to_owned())),
-                "restart" => CliCommand::Request(Request::Restart(argument.to_owned())),
+                "start" => Command::Request(Request::Start(argument.to_owned())),
+                "stop" => Command::Request(Request::Stop(argument.to_owned())),
+                "restart" => Command::Request(Request::Restart(argument.to_owned())),
                 _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
             }
         };
@@ -74,16 +74,16 @@ impl CliCommand {
     /// This Function will match the command and execute it properly
     pub async fn execute(&self, stream: &mut TcpStream) -> Result<(), TaskmasterError> {
         match self {
-            CliCommand::Exit => {
-                CliCommand::exit();
+            Command::Exit => {
+                Command::exit();
                 Ok(())
             }
-            CliCommand::Help => {
-                CliCommand::help();
+            Command::Help => {
+                Command::help();
                 Ok(())
             }
-            CliCommand::Request(request) => {
-                CliCommand::forward_to_server(request, stream).await?;
+            Command::Request(request) => {
+                Command::forward_to_server(request, stream).await?;
                 let response: Result<Response, TaskmasterError> = receive(stream).await;
                 match response {
                     Ok(result) => match result {
@@ -135,33 +135,53 @@ impl CliCommand {
         for process in processes {
             match process.status.clone() {
                 ProcessStatus::RUNNING => {
-                    let uptime = SystemTime::now()
-                        .duration_since(process.start_time)
-                        .expect("");
-                    println!(
-                        "{}\t\t{:?}\t\tpid {}, uptime {}",
-                        process.name,
-                        process.status,
-                        process.pid,
-                        Self::format_duration(uptime)
-                    );
+                    if let Ok(uptime) = SystemTime::now().duration_since(process.start_time) {
+                        println!(
+                            "{:<15} {:<10} pid {:<5}, uptime {}",
+                            process.name,
+                            format!("{:?}", process.status),
+                            process.pid,
+                            Self::format_duration(uptime)
+                        );
+                    } else {
+                        println!(
+                            "{:<15} {:<10} pid {:<5}",
+                            process.name,
+                            format!("{:?}", process.status),
+                            process.pid,
+                        );
+                    }
                 }
                 ProcessStatus::STOPPED => {
-                    let uptime = SystemTime::now()
-                        .duration_since(process.shutdown_time)
-                        .expect("");
-                    println!(
-                        "{}\t\t{:?}\t\tsince {}",
-                        process.name,
-                        process.status,
-                        Self::format_duration(uptime)
-                    );
+                    if let Ok(downtime) = SystemTime::now().duration_since(process.shutdown_time) {
+                        println!(
+                            "{:<15} {:<10} since {}",
+                            process.name,
+                            format!("{:?}", process.status),
+                            Self::format_duration(downtime)
+                        );
+                    } else {
+                        println!(
+                            "{:<15} {:<10}",
+                            process.name,
+                            format!("{:?}", process.status),
+                        );
+                    }
                 }
                 ProcessStatus::STARTING => {
-                    println!("{}\t\t{:?}", process.name, process.status);
+                    println!(
+                        "{:<15} {:<10}",
+                        process.name,
+                        format!("{:?}", process.status)
+                    );
                 }
                 ProcessStatus::FATAL(error) => {
-                    println!("{}\t\t{:?} ({})", process.name, process.status, error);
+                    println!(
+                        "{:<15} {:<10} ({})",
+                        process.name,
+                        format!("{:?}", process.status),
+                        error
+                    );
                 }
             }
         }

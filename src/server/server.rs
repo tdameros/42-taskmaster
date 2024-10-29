@@ -1,12 +1,19 @@
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
+
+use std::{
+    thread::{sleep, JoinHandle},
+    time::Duration,
+};
+
 use crate::process_manager::SharedProcessManager;
 use config::{Config, SharedConfig};
 use logger::{new_shared_logger, SharedLogger};
-use process_manager::new_shared_process_manager;
+use process_manager::{new_shared_process_manager, ProcessManager};
 use tcl::message::{receive, send, Request, Response};
 use tokio::net::{TcpListener, TcpStream};
+
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
@@ -38,6 +45,13 @@ async fn main() {
         .await
         .expect("Failed to bind tcp listener");
 
+    // start the process monitoring
+    let _monitoring_handle = start_monitor(
+        shared_process_manager.clone(),
+        shared_config.clone(),
+        shared_logger.clone(),
+    ); // in case we need it
+
     // handle the client connection
     loop {
         log_info!(shared_logger, "Waiting for Client To arrive");
@@ -53,6 +67,34 @@ async fn main() {
             }
             Err(error) => {
                 log_error!(shared_logger, "{}", format!("Accepting Client: {error}"));
+            }
+        }
+    }
+}
+
+async fn start_monitor(
+    shared_process_manager: SharedProcessManager,
+    shared_config: SharedConfig,
+    shared_logger: SharedLogger,
+) -> JoinHandle<()> {
+    loop {
+        match ProcessManager::monitor(
+            shared_process_manager.clone(),
+            shared_config.clone(),
+            shared_logger.clone(),
+            Duration::from_secs(1),
+        )
+        .await
+        {
+            Ok(handle) => {
+                return handle;
+            }
+            Err(error) => {
+                log_error!(
+                    shared_logger,
+                    "Can't spawn monitoring thread: {error}, retrying in 5 second"
+                );
+                sleep(Duration::from_secs(5));
             }
         }
     }
@@ -78,8 +120,8 @@ impl ClientHandler {
                             Response::Status(
                                 shared_process_manager
                                     .write()
-                                    .expect("")
-                                    .get_running_children(),
+                                    .expect("Can't acquire process manager")
+                                    .get_processes_state(),
                             )
                         }
                         R::Start(name) => {
@@ -207,7 +249,7 @@ impl ClientHandler {
             .get(&name)
         {
             Some(config) => {
-                manager.spawn_program(&name, &config, &shared_logger);
+                manager.spawn_program(&name, config, &shared_logger);
                 Response::Success(format!("`{name}` has been start with successful"))
             }
             None => {
