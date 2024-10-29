@@ -249,8 +249,11 @@ impl ProcessManager {
                     match error {
                         KillingChildError::NoProgramFound => unreachable!(),
                         KillingChildError::CantKillProcess => {
-                            log_error!(logger, "Can't kill a child of process: {program_name}: {error}");
-                        },
+                            log_error!(
+                                logger,
+                                "Can't kill a child of process: {program_name}: {error}"
+                            );
+                        }
                     }
                 }
             });
@@ -437,9 +440,8 @@ mod monitoring {
                         if !running_process.has_received_shutdown_order() {
                             running_process.send_signal(&config.stop_signal)?;
                             overflowing_process_number -= 1;
-
                         }
-                    };
+                    }
                 }
             };
         }
