@@ -2,7 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Deserializer};
+use serde::de::{self, Unexpected};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
@@ -82,8 +83,8 @@ pub struct ProgramConfig {
     pub(super) working_directory: String,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", default)]
-    umask: u32,
+    #[serde(rename = "umask", default, deserialize_with = "parse_umask")]
+    pub(super) umask: u16,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -145,6 +146,7 @@ pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Er
 /* -------------------------------------------------------------------------- */
 /*                               Implementation                               */
 /* -------------------------------------------------------------------------- */
+
 impl Config {
     /// create a config base on the file located in the root of the project
     pub fn load() -> Result<Self, TaskmasterError> {
@@ -153,6 +155,17 @@ impl Config {
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
     }
+}
+
+fn parse_umask<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let umask_string = String::deserialize(deserializer)?;
+    if !umask_string.chars().all(|c| c >= '0' && c <= '7') {
+        return Err(de::Error::invalid_value(Unexpected::Str(&umask_string), &"octal number"));
+    }
+    u16::from_str_radix(&umask_string, 8).map_err(|_| de::Error::custom("invalid umask"))
 }
 
 impl ProgramConfig {
