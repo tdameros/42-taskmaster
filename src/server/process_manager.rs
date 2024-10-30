@@ -142,7 +142,7 @@ impl ProcessManager {
             }
 
             // set umask
-            let mut original_umask: u16 = 0;
+            let mut original_umask: libc::mode_t = 0;
             if let Some(umask) = &program_config.umask {
                 original_umask = Self::set_umask(*umask);
             }
@@ -179,7 +179,7 @@ impl ProcessManager {
     }
 
     // Set new umask and return the previous value
-    fn set_umask(new_umask: u16) -> u16 {
+    fn set_umask(new_umask: libc::mode_t) -> libc::mode_t {
         unsafe { libc::umask(new_umask) }
     }
 

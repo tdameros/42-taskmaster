@@ -84,7 +84,7 @@ pub struct ProgramConfig {
 
     /// An umask to set before launching the program
     #[serde(rename = "umask", deserialize_with = "parse_umask")]
-    pub(super) umask: Option<u16>,
+    pub(super) umask: Option<libc::mode_t>,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -118,6 +118,7 @@ pub enum Signal {
     SIGINT,
     SIGKILL,
     SIGPIPE,
+    #[cfg(target_os = "linux")]
     SIGPOLL,
     SIGPROF,
     SIGQUIT,
@@ -157,7 +158,7 @@ impl Config {
     }
 }
 
-fn parse_umask<'de, D>(deserializer: D) -> Result<Option<u16>, D::Error>
+fn parse_umask<'de, D>(deserializer: D) -> Result<Option<libc::mode_t>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -169,7 +170,7 @@ where
                 &"octal number",
             ));
         }
-        u16::from_str_radix(&umask_str, 8)
+        libc::mode_t::from_str_radix(&umask_str, 8)
             .map(Some)
             .map_err(|_| de::Error::custom("invalid umask"))
     } else {
