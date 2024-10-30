@@ -122,7 +122,7 @@ impl ProcessManager {
 
             // TODO change the pwd according to the config
 
-            // TODO add env variable
+            tmp_child.envs(&program_config.environmental_variable_to_set);
 
             // adding arguments if there are any in the command section of program config
             if split_command.len() > 1 {
