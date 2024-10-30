@@ -10,7 +10,7 @@ use std::{
     thread::{sleep, JoinHandle},
     time::Duration,
 };
-use tcl::message::{receive, Request};
+use tcl::message::{receive, send, Request, Response};
 use tokio::net::{TcpListener, TcpStream};
 
 /* -------------------------------------------------------------------------- */
@@ -112,53 +112,60 @@ impl ClientHandler {
         use Request as R;
         loop {
             match receive::<Request>(&mut socket).await {
-                Ok(message) => match message {
-                    R::Status => {
-                        log_info!(shared_logger, "Status Request gotten");
+                Ok(message) => {
+                    let response = match message {
+                        R::Status => {
+                            log_info!(shared_logger, "Status Request gotten");
+                            Response::Status(
+                                shared_process_manager
+                                    .write()
+                                    .expect("Can't acquire process manager")
+                                    .get_processes_state(),
+                            )
+                        }
+                        R::Start(name) => {
+                            log_info!(shared_logger, "Start Request gotten");
+                            ClientHandler::handle_start(
+                                name,
+                                shared_logger.clone(),
+                                shared_config.clone(),
+                                shared_process_manager.clone(),
+                            )
+                            .await
+                        }
+                        R::Stop(name) => {
+                            log_info!(shared_logger, "Stop Request gotten");
+                            ClientHandler::handle_stop(
+                                name,
+                                shared_logger.clone(),
+                                shared_config.clone(),
+                                shared_process_manager.clone(),
+                            )
+                            .await
+                        }
+                        R::Restart(name) => {
+                            log_info!(shared_logger, "Restart Request gotten");
+                            ClientHandler::handle_restart(
+                                name,
+                                shared_logger.clone(),
+                                shared_config.clone(),
+                                shared_process_manager.clone(),
+                            )
+                            .await
+                        }
+                        R::Reload => {
+                            log_info!(shared_logger, "Reload Request gotten");
+                            ClientHandler::handle_reload(
+                                shared_logger.clone(),
+                                shared_config.clone(),
+                            )
+                            .await
+                        }
+                    };
+                    if let Err(error) = send(&mut socket, &response).await {
+                        log_error!(shared_logger, "{}", error);
                     }
-                    R::Start(name) => {
-                        log_info!(shared_logger, "Start Request gotten");
-                        ClientHandler::handle_start(
-                            name,
-                            shared_logger.clone(),
-                            shared_config.clone(),
-                            shared_process_manager.clone(),
-                        )
-                        .await;
-                    }
-                    R::Stop(name) => {
-                        log_info!(shared_logger, "Stop Request gotten");
-                        ClientHandler::handle_stop(
-                            name,
-                            shared_logger.clone(),
-                            shared_config.clone(),
-                            shared_process_manager.clone(),
-                        )
-                        .await;
-                    }
-                    R::Restart(name) => {
-                        log_info!(shared_logger, "Restart Request gotten");
-                        ClientHandler::handle_stop(
-                            name.clone(),
-                            shared_logger.clone(),
-                            shared_config.clone(),
-                            shared_process_manager.clone(),
-                        )
-                        .await;
-                        ClientHandler::handle_start(
-                            name,
-                            shared_logger.clone(),
-                            shared_config.clone(),
-                            shared_process_manager.clone(),
-                        )
-                        .await;
-                    }
-                    R::Reload => {
-                        log_info!(shared_logger, "Reload Request gotten");
-                        ClientHandler::handle_reload(shared_logger.clone(), shared_config.clone())
-                            .await;
-                    }
-                },
+                }
                 Err(error) => {
                     // if the error occurred because the client disconnected then the task of this thread is finished
                     if error.client_disconnected() {
@@ -168,11 +175,40 @@ impl ClientHandler {
                         log_error!(shared_logger, "{error}");
                     }
                 }
-            }
+            };
         }
     }
 
-    async fn handle_reload(shared_logger: SharedLogger, shared_config: SharedConfig) {
+    async fn handle_restart(
+        name: String,
+        shared_logger: SharedLogger,
+        shared_config: SharedConfig,
+        shared_process_manager: SharedProcessManager,
+    ) -> Response {
+        let mut response = Self::handle_stop(
+            name.clone(),
+            shared_logger.clone(),
+            shared_config.clone(),
+            shared_process_manager.clone(),
+        )
+        .await;
+        if let Response::Error(error) = response {
+            return Response::Error(error.to_string());
+        }
+        response = Self::handle_start(
+            name.clone(),
+            shared_logger,
+            shared_config,
+            shared_process_manager,
+        )
+        .await;
+        if let Response::Error(error) = response {
+            return Response::Error(error.to_string());
+        }
+        Response::Success(format!("`{name}` restarted successfully"))
+    }
+
+    async fn handle_reload(shared_logger: SharedLogger, shared_config: SharedConfig) -> Response {
         log_info!(shared_logger, "Reload Request gotten");
         match Config::load() {
             Ok(new_config) => {
@@ -183,6 +219,7 @@ impl ClientHandler {
                     shared_logger,
                     "The config has been reloaded: {shared_config:?}"
                 );
+                Response::Success("Configuration reloaded successfully".to_string())
             }
             Err(error) => {
                 // TODO send the error back to the client saying something like the config was not able to be reloaded due to : error; for it to display
@@ -190,6 +227,7 @@ impl ClientHandler {
                     shared_logger,
                     "The config file could not be reloaded, due to {error}"
                 );
+                Response::Error(format!("Configuration could not be reloaded ({error})"))
             }
         }
     }
@@ -199,7 +237,7 @@ impl ClientHandler {
         shared_logger: SharedLogger,
         shared_config: SharedConfig,
         shared_process_manager: SharedProcessManager,
-    ) {
+    ) -> Response {
         let mut manager = shared_process_manager
             .write()
             .expect("One of the holder of this lock panicked");
@@ -211,10 +249,11 @@ impl ClientHandler {
         {
             Some(config) => {
                 manager.spawn_program(&name, config, &shared_logger);
-                // TODO: Implement response ACK
+                Response::Success(format!("`{name}` has been start with successful"))
             }
             None => {
                 log_error!(shared_logger, "No program named '{}' found", name);
+                Response::Error(format!("`{name}` could not be started (program not found)"))
             }
         }
     }
@@ -224,18 +263,16 @@ impl ClientHandler {
         shared_logger: SharedLogger,
         shared_config: SharedConfig,
         shared_process_manager: SharedProcessManager,
-    ) {
+    ) -> Response {
         let mut manager = shared_process_manager
             .write()
             .expect("One of the holder of this lock panicked");
         let read_config = shared_config.read().expect("lock has been poison");
         match manager.shutdown_childs(&name, &read_config, &shared_logger) {
-            Ok(()) => {
-                // TODO: Implement response ACK
-            }
+            Ok(()) => Response::Success(format!("`{name}` has been stop with successful")),
             Err(error) => {
-                // TODO match and respond to the client accordingly
                 log_error!(shared_logger, "Failed to kill child process: {error}");
+                Response::Error(format!("`{name}` could not be stopped ({error})"))
             }
         }
     }
