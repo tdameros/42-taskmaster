@@ -49,7 +49,8 @@ async fn main() {
         shared_process_manager.clone(),
         shared_config.clone(),
         shared_logger.clone(),
-    ); // in case we need it
+    )
+    .await; // in case we need it
 
     // handle the client connection
     loop {
