@@ -79,7 +79,7 @@ pub struct ProgramConfig {
     // environmental_variable_to_set: Vec<(String, String)>,
     /// A working directory to set before launching the program
     #[serde(rename = "workingdir", default)]
-    working_directory: String,
+    pub(super) working_directory: String,
 
     /// An umask to set before launching the program
     #[serde(rename = "umask", default)]

@@ -120,7 +120,9 @@ impl ProcessManager {
             // create the command using the command property given by the program config
             let mut tmp_child = Command::new(split_command.first().expect("Unreachable"));
 
-            // TODO change the pwd according to the config
+            if !program_config.working_directory.is_empty() {
+                tmp_child.current_dir(&program_config.working_directory);
+            }
 
             tmp_child.envs(&program_config.environmental_variable_to_set);
 
