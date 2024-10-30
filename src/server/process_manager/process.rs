@@ -4,68 +4,13 @@
 
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
-use std::{fmt::Display, process::{Child, ExitStatus}, time::SystemTime};
+use std::{fmt::Display, process::ExitStatus, time::SystemTime};
 use crate::config::{ProgramConfig, Signal};
+use super::{Process, ProcessError, ProcessState};
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
-#[derive(Debug)]
-pub(super) struct Process {
-    /// the handle to the process
-    child: Option<Child>,
-
-    /// the time when the process was launched, used to determine the
-    /// transition from starting to running
-    started_since: SystemTime, // to clarify
-
-    /// use to determine when to abort the child
-    time_since_shutdown: Option<SystemTime>,
-
-    /// store the state of a given process
-    state: ProcessState,
-}
-
-/// Represent the state of a given process
-#[derive(Debug, Default)]
-enum ProcessState {
-    /// the default state, The process has been stopped due to a stop request or has never been started.
-    #[default]
-    Stopped,
-
-    /// The process is starting due to a start request.
-    Starting,
-
-    /// The process is running.
-    Running,
-
-    /// The process entered the Starting state but subsequently exited too quickly
-    /// (before the time defined in time_to_start) to move to the Running state.
-    Backoff,
-
-    /// The process is stopping due to a stop request.
-    Stopping,
-
-    /// The process exited from the RUNNING state (expectedly or unexpectedly).
-    Exited,
-
-    /// The process could not be started successfully.
-    Fatal,
-
-    /// The process is in an unknown state (error while getting the exit status).
-    Unknown,
-}
-
-/// represent the error that can occur while performing action on the process class
-#[derive(Debug)]
-enum ProcessError {
-    /// an operation was perform on a child but no child were found (aka not launched yet)
-    NoChild,
-    ExitStatusNotFound(std::io::Error),
-    CantKillProcess(std::io::Error),
-    Signal(std::io::Error),
-}
-
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
@@ -233,6 +178,19 @@ impl Process {
         }
     }
 
+    pub(super) fn update_status(&mut self) {
+        let result = self.get_exit_code();
+        match self.state {
+            ProcessState::Stopped => self.process_stopped(result),
+            ProcessState::Starting => todo!(),
+            ProcessState::Running => todo!(),
+            ProcessState::Backoff => todo!(),
+            ProcessState::Stopping => todo!(),
+            ProcessState::Exited => todo!(),
+            ProcessState::Fatal => todo!(),
+            ProcessState::Unknown => todo!(),
+        }
+    }
 }
 
 /* -------------------------------------------------------------------------- */

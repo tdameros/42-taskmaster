@@ -6,10 +6,8 @@ use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_debug, log_error, log_info,
     logger::{Logger, SharedLogger},
-    running_process::Process,
 };
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     error::Error,
     fmt::Display,
@@ -19,27 +17,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-
-/* -------------------------------------------------------------------------- */
-/*                                   Struct                                   */
-/* -------------------------------------------------------------------------- */
-/// this represent the running process
-#[derive(Debug)]
-pub(super) struct ProcessManager(HashMap<String, Vec<Process>>);
-
-/// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
-pub(super) type SharedProcessManager = Arc<RwLock<ProcessManager>>;
-
-pub(super) fn new_shared_process_manager(
-    config: &RwLock<Config>,
-    logger: &Logger,
-) -> SharedProcessManager {
-    Arc::new(RwLock::new(ProcessManager::new_from_config(config, logger)))
-}
-
-/// exist simply for an ease of implementation
-#[derive(Debug, Default)]
-struct ProgramToRestart(pub HashMap<String, (i64, ProgramConfig)>);
+use super::{ProcessManager, ProgramToRestart};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -83,9 +61,9 @@ impl ProcessManager {
     }
 
     fn monitor_once(&mut self) {
-        self.0.iter_mut().for_each(|(program_name, process_vec)| {
+        self.0.iter_mut().for_each(|(_program_name, process_vec)| {
             process_vec.iter_mut().for_each(|process| {
-                let exit_code = process.get_exit_code();
+                process.update_status();
             });
         });
     }
@@ -213,107 +191,17 @@ impl ProcessManager {
         // here we don't remove the entry since the monitor will do it for use
     }
 
-    // /// do one round of monitoring
-    // fn monitor_once(&mut self, config: &RwLock<Config>, logger: &Logger) {
-    //     // query the new config
-    //     let mut config_access = config
-    //         .write()
-    //         .expect("Some user of the config lock has panicked");
-    //     log_debug!(logger, "{config_access:?}");
 
-    //     let mut program_to_remove = Vec::new();
-    //     let mut program_to_restart = ProgramToRestart::default();
 
-    //     // iterate over all process
-    //     self.children
-    //         .iter_mut()
-    //         .for_each(|(program_name, vec_running_process)| {
-    //             monitoring::check_inside(
-    //                 &mut config_access,
-    //                 program_name,
-    //                 vec_running_process,
-    //                 logger,
-    //                 &mut program_to_restart,
-    //                 &mut program_to_remove,
-    //             );
-    //         });
-    //     log_debug!(logger, "{self:?}");
-
-    //     self.monitor_shutdown_childs(program_to_remove, &config_access, logger);
-    //     // after this point self contain only running child, child in the shutdown phase, child were getting there status code returned an error and unkillable child
-    //     // so if we filter on child that do not have a time_since_shutdown we have the number of child that are running and we can compare it to the desire number
-    //     // to see if we need to kill additional child or start restarting the one we detected that we musted restart
-    //     log_debug!(logger, "{self:?}");
-
-    //     // remove excess program
-    //     self.children
-    //         .iter_mut()
-    //         .for_each(|(program_name, vec_running_program)| {
-    //             if let Err(error) = monitoring::filter_inside(
-    //                 &config_access,
-    //                 program_name,
-    //                 vec_running_program,
-    //                 &mut program_to_restart,
-    //             ) {
-    //                 match error {
-    //                     KillingChildError::NoProgramFound => unreachable!(),
-    //                     KillingChildError::CantKillProcess => {
-    //                         log_error!(
-    //                             logger,
-    //                             "Can't kill a child of process: {program_name}: {error}"
-    //                         );
-    //                     }
-    //                 }
-    //             }
-    //         });
-    //     log_debug!(logger, "{self:?}");
-
-    //     self.monitor_restart_childs(program_to_restart, logger);
-    //     log_debug!(logger, "{self:?}");
-    // }
-
-    // fn monitor_restart_childs(&mut self, program_to_restart: ProgramToRestart, logger: &Logger) {
-    //     // restart the program
-    //     program_to_restart.0.iter().for_each(
-    //         |(program_name, (number_of_process, program_config))| {
-    //             for _ in 0..*number_of_process {
-    //                 if let Err(error) = self.spawn_child(program_config, program_name) {
-    //                     log_error!(logger, "Can't spawn child of {program_name}: {error}");
-    //                 }
-    //             }
-    //         },
-    //     );
-    // }
-
-    // fn monitor_shutdown_childs(
-    //     &mut self,
-    //     program_to_remove: Vec<String>,
-    //     config_access: &std::sync::RwLockWriteGuard<'_, Config>,
-    //     logger: &Logger,
-    // ) {
-    //     // here we kill child that are not in the config anymore
-    //     for program in program_to_remove {
-    //         match self.shutdown_childs(&program, config_access, logger) {
-    //             Ok(_) => {
-    //                 // child will shutdown and or be remove in next iteration of this function
-    //             }
-    //             Err(error) => match error {
-    //                 KillingChildError::NoProgramFound => unreachable!(),
-    //                 KillingChildError::CantKillProcess => {
-    //                     log_error!(logger, "Can't kill a child of process: {program}: {error}");
-    //                 }
-    //             },
-    //         }
-    //     }
-    // }
-
-    /// this function spawn a thread the will monitor all process launch in self, refreshing every refresh_period
+    /// this function spawn a thread the will monitor all process in self updating there status as needed, refreshing every refresh_period
     pub(super) async fn monitor(
+        &mut self,
         shared_process_manager: SharedProcessManager,
         shared_config: SharedConfig,
         shared_logger: SharedLogger,
         refresh_period: Duration,
     ) -> Result<JoinHandle<()>, std::io::Error> {
+        let shared = Arc::new(RwLock::new(self));
         thread::Builder::new().spawn(move || loop {
             {
                 log_debug!(shared_logger, "about to lock manager");
@@ -475,6 +363,12 @@ impl Deref for ProgramToRestart {
 impl DerefMut for ProgramToRestart {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl From<ProcessManager> for SharedProcessManager {
+    fn from(value: ProcessManager) -> Self {
+        Arc::new(RwLock::new(value))
     }
 }
 

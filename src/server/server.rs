@@ -2,10 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use crate::process_manager::SharedProcessManager;
 use config::{Config, SharedConfig};
 use logger::{new_shared_logger, SharedLogger};
-use process_manager::{new_shared_process_manager, ProcessManager};
 use std::{
     thread::{sleep, JoinHandle},
     time::Duration,
@@ -19,7 +17,6 @@ use tokio::net::{TcpListener, TcpStream};
 mod config;
 mod logger;
 mod process_manager;
-mod running_process;
 
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
