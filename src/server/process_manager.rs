@@ -320,7 +320,6 @@ impl ProcessManager {
     }
 
     pub fn get_processes_state(&mut self) -> HashMap<String, Vec<ProcessState>> {
-        println!("{:?}", self.children);
         let mut result: HashMap<String, Vec<ProcessState>> = HashMap::new();
         for (name, childs) in self.children.iter() {
             let mut processes_state: Vec<ProcessState> = Vec::new();

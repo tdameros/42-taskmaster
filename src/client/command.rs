@@ -132,7 +132,6 @@ impl Command {
     }
 
     fn display_status(programs: &HashMap<String, Vec<ProcessState>>) {
-        println!("{programs:?}");
         let mut keys: Vec<String> = programs.keys().cloned().collect();
         keys.sort();
         for name in keys.iter() {
