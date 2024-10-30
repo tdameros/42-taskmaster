@@ -3,7 +3,10 @@
 /* -------------------------------------------------------------------------- */
 
 use serde::{Deserialize, Serialize};
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
 use tcl::error::TaskmasterError;
@@ -20,10 +23,7 @@ pub(super) type SharedConfig = Arc<RwLock<Config>>;
 
 /// struct representing the process the server should monitor
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct Config {
-    #[serde(default)]
-    pub programs: HashMap<String, ProgramConfig>,
-}
+pub struct Config(#[serde(default)] HashMap<String, ProgramConfig>);
 
 /// represent all configuration of a monitored program
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -161,5 +161,19 @@ impl ProgramConfig {
             true => self.auto_restart == AutoRestart::Always,
             false => self.auto_restart != AutoRestart::Never,
         }
+    }
+}
+
+impl Deref for Config {
+    type Target = HashMap<String, ProgramConfig>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Config {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

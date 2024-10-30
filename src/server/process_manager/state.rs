@@ -2,30 +2,32 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use crate::config::ProgramConfig;
 use super::{Process, ProcessError, ProcessState};
+use crate::config::ProgramConfig;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
 impl Process {
-    pub(super) fn process_starting(&mut self, code: Result<Option<i32>, ProcessError>, program_config: &ProgramConfig) {
+    pub(super) fn process_starting(
+        &mut self,
+        code: Result<Option<i32>, ProcessError>,
+        program_config: &ProgramConfig,
+    ) {
         match code {
             // the program is no longer running
-            Ok(Some(code)) => {
-                match self.is_no_longer_starting(program_config) {
-                    Ok(true) => match program_config.expected_exit_code.contains(&code) {
-                        true => self.state = ProcessState::Exited,
-                        false => self.state = ProcessState::Stopped,
-                    },
-                    Ok(false) => self.state = ProcessState::Backoff,
-                    Err(_) => unreachable!(),
-                }
+            Ok(Some(code)) => match self.is_no_longer_starting(program_config) {
+                Ok(true) => match program_config.expected_exit_code.contains(&code) {
+                    true => self.state = ProcessState::Exited,
+                    false => self.state = ProcessState::Stopped,
+                },
+                Ok(false) => self.state = ProcessState::Backoff,
+                Err(_) => unreachable!(),
             },
             // the program is still running
             Ok(None) => match self.is_no_longer_starting(program_config) {
                 Ok(true) => self.state = ProcessState::Running,
-                Ok(false) => {},
+                Ok(false) => {}
                 Err(_) => unreachable!(),
             },
             // we don't know the state of the child anymore
@@ -33,17 +35,19 @@ impl Process {
         }
     }
 
-    pub(super) fn process_running(&mut self, code: Result<Option<i32>, ProcessError>, program_config: &ProgramConfig) {
+    pub(super) fn process_running(
+        &mut self,
+        code: Result<Option<i32>, ProcessError>,
+        program_config: &ProgramConfig,
+    ) {
         match code {
             // the program is not running anymore
-            Ok(Some(code)) => {
-                match program_config.expected_exit_code.contains(&code) {
-                    true => self.state = ProcessState::Exited,
-                    false => self.state = ProcessState::Stopped,
-                }
+            Ok(Some(code)) => match program_config.expected_exit_code.contains(&code) {
+                true => self.state = ProcessState::Exited,
+                false => self.state = ProcessState::Stopped,
             },
             // the program is still running
-            Ok(None) => {},
+            Ok(None) => {}
             // we don't know the state of the child anymore
             Err(_) => self.state = ProcessState::Unknown,
         }
@@ -54,13 +58,12 @@ impl Process {
             Ok(Some(_)) => {
                 // the program is not running anymore
                 self.state = ProcessState::Stopped;
-            },
+            }
             Ok(None) => {
                 // the program is still running
-            },
+            }
             // we don't know the state of the child anymore
             Err(_) => self.state = ProcessState::Unknown,
         }
     }
-
 }

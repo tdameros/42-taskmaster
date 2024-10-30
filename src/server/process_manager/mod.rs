@@ -2,8 +2,8 @@
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
 pub(super) mod manager;
-pub(super) mod state;
 pub(super) mod process;
+pub(super) mod state;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
@@ -22,6 +22,9 @@ pub(super) struct Process {
 
     /// store the state of a given process
     state: ProcessState,
+
+    /// number of retry
+    starting_retry: u32,
 }
 
 /// Represent the state of a given process

@@ -2,6 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use super::{ProcessManager, ProgramToRestart};
 use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_debug, log_error, log_info,
@@ -17,7 +18,6 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use super::{ProcessManager, ProgramToRestart};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -60,13 +60,20 @@ impl ProcessManager {
         Self(result)
     }
 
-    fn monitor_once(&mut self) {
-        self.0.iter_mut().for_each(|(_program_name, process_vec)| {
+    fn monitor_once(&mut self, config: &Config) {
+        // update inner state
+        self.0.iter_mut().for_each(|(program_name, process_vec)| {
             process_vec.iter_mut().for_each(|process| {
-                process.update_state();
+                if let Some(program_config) = config.get(program_name) {
+                    process.update_state(program_config);
+                }
             });
         });
+
+        // try to attain the config state
     }
+
+    fn maintain_config(&mut self, config: &Config)
 
     /// this function spawn all the replica of a given program given a reference to a programs config
     pub fn spawn_program(
@@ -191,8 +198,6 @@ impl ProcessManager {
         // here we don't remove the entry since the monitor will do it for use
     }
 
-
-
     /// this function spawn a thread the will monitor all process in self updating there status as needed, refreshing every refresh_period
     pub(super) async fn monitor(
         &mut self,
@@ -203,14 +208,7 @@ impl ProcessManager {
     ) -> Result<JoinHandle<()>, std::io::Error> {
         let shared = Arc::new(RwLock::new(self));
         thread::Builder::new().spawn(move || loop {
-            {
-                log_debug!(shared_logger, "about to lock manager");
-                // shared_process_manager
-                //     .write()
-                //     .expect("the lock has been poisoned")
-                //     .monitor_once(&shared_config, &shared_logger);
-            }
-
+            self.monitor_once(&shared_config.read().unwrap());
             thread::sleep(refresh_period);
         })
     }

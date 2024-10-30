@@ -2,16 +2,23 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use super::{Process, ProcessError, ProcessState};
+use crate::config::{ProgramConfig, Signal};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::{fmt::Display, process::ExitStatus, time::SystemTime};
-use crate::config::{ProgramConfig, Signal};
-use super::{Process, ProcessError, ProcessState};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
 impl Process {
+    pub(super) fn new(config: &ProgramConfig) -> Self {
+        Self {
+            starting_retry: config.max_number_of_restart,
+            ..Default::default()
+        }
+    }
+
     /// Attempts to retrieve the child process's exit code.
     ///
     /// # Returns
@@ -101,7 +108,10 @@ impl Process {
     /// # Arguments
     ///
     /// * `program_config` - The configuration for the program, containing the start-up time
-    pub(super) fn is_no_longer_starting(&self, program_config: &ProgramConfig) -> Result<bool, ProcessError>{
+    pub(super) fn is_no_longer_starting(
+        &self,
+        program_config: &ProgramConfig,
+    ) -> Result<bool, ProcessError> {
         self.started_since
             .map(|start_time| {
                 SystemTime::now()
@@ -115,18 +125,16 @@ impl Process {
     /// Send the given signal to the child, starting the graceful shutdown timer.
     ///
     /// # Errors
-    /// 
+    ///
     /// Returns a `ProcessError` if:
     /// - There is no child process (`ProcessError::NoChild`)
     /// - The signal sending operation fails (`ProcessError::SignalError`)
     pub(super) fn send_signal(&mut self, signal: &Signal) -> Result<(), ProcessError> {
         let signal_number = Self::signal_to_libc(signal);
-        
+
         let child = self.child.as_ref().ok_or(ProcessError::NoChild)?;
-        
-        let result = unsafe {
-            libc::kill(child.id() as libc::pid_t, signal_number as libc::c_int)
-        };
+
+        let result = unsafe { libc::kill(child.id() as libc::pid_t, signal_number as libc::c_int) };
 
         if result == -1 {
             return Err(ProcessError::Signal(std::io::Error::last_os_error()));
@@ -178,13 +186,13 @@ impl Process {
             ProcessState::Starting => self.process_starting(result, program_config),
             ProcessState::Running => self.process_running(result, program_config),
             ProcessState::Stopping => self.process_stopping(result),
-            ProcessState::Exited |
-            ProcessState::Backoff |
-            ProcessState::Stopped |
-            ProcessState::Fatal |
-            ProcessState::Unknown => {
+            ProcessState::Exited
+            | ProcessState::Backoff
+            | ProcessState::Stopped
+            | ProcessState::Fatal
+            | ProcessState::Unknown => {
                 // no update exit status can trigger a change in state only manual or configured restart can
-            },
+            }
         }
     }
 

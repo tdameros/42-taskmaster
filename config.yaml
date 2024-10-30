@@ -1,4 +1,3 @@
-programs:
   nginx:
     cmd: "ping google.com"
     numprocs: 1
