@@ -21,6 +21,8 @@ use std::{
     time::Duration,
 };
 use tcl::error::TaskmasterError;
+use tcl::message::{ProcessState, ProcessStatus};
+
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
@@ -154,7 +156,8 @@ impl ProcessManager {
                     }
 
                     // create a instance of running process with the info of this given child
-                    let process = RunningProcess::new(child);
+                    let mut process = RunningProcess::new(child);
+                    process.set_status(ProcessStatus::Running);
 
                     // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
                     self.children
@@ -235,6 +238,7 @@ impl ProcessManager {
                                 process.get_child_id()
                             );
                             process.send_signal(&config.stop_signal)?;
+                            process.set_status(ProcessStatus::Stopped);
                         }
                         Ok(())
                     }
@@ -248,6 +252,7 @@ impl ProcessManager {
                                 process.get_child_id()
                             );
                             process.kill()?;
+                            process.set_status(ProcessStatus::Stopped);
                         }
                         Ok(())
                     }
@@ -372,6 +377,29 @@ impl ProcessManager {
             thread::sleep(refresh_period);
         })
     }
+
+    pub fn get_processes_state(&mut self) -> HashMap<String, Vec<ProcessState>> {
+        let mut result: HashMap<String, Vec<ProcessState>> = HashMap::new();
+        for (name, childs) in self.children.iter() {
+            let mut processes_state: Vec<ProcessState> = Vec::new();
+            for child in childs.iter() {
+                processes_state.push(ProcessState::from(child));
+            }
+            result.insert(name.to_string(), processes_state);
+        }
+        result
+    }
+}
+
+impl From<&RunningProcess> for ProcessState {
+    fn from(process: &RunningProcess) -> Self {
+        ProcessState {
+            pid: process.get_child_id(),
+            status: process.get_status(),
+            start_time: process.get_start_time(),
+            shutdown_time: process.get_shutdown_time(),
+        }
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -407,7 +435,7 @@ mod monitoring {
                             // we need to check if it's time to kill the child
                             if running_process.has_received_shutdown_order()
                                 && running_process
-                                    .its_time_to_kill_the_child(program_config)
+                                .its_time_to_kill_the_child(program_config)
                             {
                                 if let Err(error) = running_process.kill() {
                                     log_error!(logger, "Can't kill a child: {error}");

@@ -9,9 +9,10 @@
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
-
 use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::SystemTime;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -22,7 +23,11 @@ use tokio::{
 /* -------------------------------------------------------------------------- */
 /// Represent what can be send to the client as a response
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Response {}
+pub enum Response {
+    Success(String),
+    Error(String),
+    Status(HashMap<String, Vec<ProcessState>>),
+}
 
 /// Represent what can be send to the server as request
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,6 +37,23 @@ pub enum Request {
     Stop(String),
     Restart(String),
     Reload,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ProcessStatus {
+    Stopped,
+    Stopping,
+    Starting,
+    Running,
+    Fatal(String),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProcessState {
+    pub status: ProcessStatus,
+    pub pid: u32,
+    pub start_time: SystemTime,
+    pub shutdown_time: Option<SystemTime>,
 }
 
 /* -------------------------------------------------------------------------- */
