@@ -67,24 +67,24 @@ pub struct ProgramConfig {
     pub(super) time_to_stop_gracefully: u64,
 
     /// Optional stdout redirection
-    #[serde(rename = "stdout", default)]
-    pub(super) stdout_redirection: String,
+    #[serde(rename = "stdout")]
+    pub(super) stdout_redirection: Option<String>,
 
     /// Optional stderr redirection
-    #[serde(rename = "stderr", default)]
-    pub(super) stderr_redirection: String,
+    #[serde(rename = "stderr")]
+    pub(super) stderr_redirection: Option<String>,
 
     /// Environment variables to set before launching the program
-    #[serde(rename = "env", default)]
-    pub(super) environmental_variable_to_set: HashMap<String, String>,
+    #[serde(rename = "env")]
+    pub(super) environmental_variable_to_set: Option<HashMap<String, String>>,
     // environmental_variable_to_set: Vec<(String, String)>,
     /// A working directory to set before launching the program
-    #[serde(rename = "workingdir", default)]
-    pub(super) working_directory: String,
+    #[serde(rename = "workingdir")]
+    pub(super) working_directory: Option<String>,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", default, deserialize_with = "parse_umask")]
-    pub(super) umask: u16,
+    #[serde(rename = "umask", deserialize_with = "parse_umask")]
+    pub(super) umask: Option<u16>,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -157,18 +157,24 @@ impl Config {
     }
 }
 
-fn parse_umask<'de, D>(deserializer: D) -> Result<u16, D::Error>
+fn parse_umask<'de, D>(deserializer: D) -> Result<Option<u16>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let umask_string = String::deserialize(deserializer)?;
-    if !umask_string.chars().all(|c| ('0'..='7').contains(&c)) {
-        return Err(de::Error::invalid_value(
-            Unexpected::Str(&umask_string),
-            &"octal number",
-        ));
+    let umask_deserialize = Option::<String>::deserialize(deserializer)?;
+    if let Some(umask_str) = umask_deserialize {
+        if !umask_str.chars().all(|c| ('0'..='7').contains(&c)) {
+            return Err(de::Error::invalid_value(
+                Unexpected::Str(&umask_str),
+                &"octal number",
+            ));
+        }
+        u16::from_str_radix(&umask_str, 8)
+            .map(Some)
+            .map_err(|_| de::Error::custom("invalid umask"))
+    } else {
+        Ok(None)
     }
-    u16::from_str_radix(&umask_string, 8).map_err(|_| de::Error::custom("invalid umask"))
 }
 
 impl ProgramConfig {
