@@ -9,22 +9,9 @@ use crate::config::{ProgramConfig, Signal};
 use super::{Process, ProcessError, ProcessState};
 
 /* -------------------------------------------------------------------------- */
-/*                                   Struct                                   */
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
 impl Process {
-    /// create a new RunningProcess struct based on the given child
-    pub(super) fn new() -> Self {
-        Self {
-            started_since: SystemTime::now(),
-            child: Default::default(),
-            time_since_shutdown: Default::default(),
-            state: Default::default(),
-        }
-    }
-
     /// Attempts to retrieve the child process's exit code.
     ///
     /// # Returns
@@ -106,17 +93,23 @@ impl Process {
 
     /// Determines if the program has completed its starting phase.
     ///
-    /// Returns true if:
-    /// The time elapsed since the process started exceeds the configured start-up time.
+    /// Returns:
+    /// - `Ok(true)` if the process has started and the time elapsed since it started exceeds the configured start-up time.
+    /// - `Ok(false)` if the process has started but hasn't exceeded the start-up time yet.
+    /// - `Err(ProcessError::NotStarted)` if the process hasn't been started.
     ///
     /// # Arguments
     ///
     /// * `program_config` - The configuration for the program, containing the start-up time
-    pub(super) fn is_no_longer_starting(&self, program_config: &ProgramConfig) -> bool {
-        SystemTime::now()
-            .duration_since(self.started_since)
-            .map(|elapsed| elapsed.as_secs() > program_config.time_to_start)
-            .unwrap_or(false)
+    pub(super) fn is_no_longer_starting(&self, program_config: &ProgramConfig) -> Result<bool, ProcessError>{
+        self.started_since
+            .map(|start_time| {
+                SystemTime::now()
+                    .duration_since(start_time)
+                    .map(|elapsed| elapsed.as_secs() > program_config.time_to_start)
+                    .unwrap_or(false)
+            })
+            .ok_or(ProcessError::NoChild)
     }
 
     /// Send the given signal to the child, starting the graceful shutdown timer.
@@ -178,18 +171,26 @@ impl Process {
         }
     }
 
-    pub(super) fn update_status(&mut self) {
+    /// check the child state and change it's status if needed
+    pub(super) fn update_state(&mut self, program_config: &ProgramConfig) {
         let result = self.get_exit_code();
         match self.state {
-            ProcessState::Stopped => self.process_stopped(result),
-            ProcessState::Starting => todo!(),
-            ProcessState::Running => todo!(),
-            ProcessState::Backoff => todo!(),
-            ProcessState::Stopping => todo!(),
-            ProcessState::Exited => todo!(),
-            ProcessState::Fatal => todo!(),
-            ProcessState::Unknown => todo!(),
+            ProcessState::Starting => self.process_starting(result, program_config),
+            ProcessState::Running => self.process_running(result, program_config),
+            ProcessState::Stopping => self.process_stopping(result),
+            ProcessState::Exited |
+            ProcessState::Backoff |
+            ProcessState::Stopped |
+            ProcessState::Fatal |
+            ProcessState::Unknown => {
+                // no update exit status can trigger a change in state only manual or configured restart can
+            },
         }
+    }
+
+    /// set the state of the child, this is intended to be use responsibly and with confidence
+    pub(super) fn set_state(&mut self, state: ProcessState) {
+        self.state = state;
     }
 }
 

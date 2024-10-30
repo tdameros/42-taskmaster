@@ -63,7 +63,7 @@ impl ProcessManager {
     fn monitor_once(&mut self) {
         self.0.iter_mut().for_each(|(_program_name, process_vec)| {
             process_vec.iter_mut().for_each(|process| {
-                process.update_status();
+                process.update_state();
             });
         });
     }

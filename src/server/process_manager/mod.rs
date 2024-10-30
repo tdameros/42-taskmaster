@@ -8,14 +8,14 @@ pub(super) mod process;
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct Process {
     /// the handle to the process
     child: Option<std::process::Child>,
 
     /// the time when the process was launched, used to determine the
     /// transition from starting to running
-    started_since: std::time::SystemTime, // to clarify
+    started_since: Option<std::time::SystemTime>, // to clarify
 
     /// use to determine when to abort the child
     time_since_shutdown: Option<std::time::SystemTime>,
