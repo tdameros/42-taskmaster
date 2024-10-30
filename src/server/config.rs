@@ -2,8 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use serde::{Deserialize, Serialize, Deserializer};
 use serde::de::{self, Unexpected};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
@@ -162,8 +162,11 @@ where
     D: Deserializer<'de>,
 {
     let umask_string = String::deserialize(deserializer)?;
-    if !umask_string.chars().all(|c| c >= '0' && c <= '7') {
-        return Err(de::Error::invalid_value(Unexpected::Str(&umask_string), &"octal number"));
+    if !umask_string.chars().all(|c| ('0'..='7').contains(&c)) {
+        return Err(de::Error::invalid_value(
+            Unexpected::Str(&umask_string),
+            &"octal number",
+        ));
     }
     u16::from_str_radix(&umask_string, 8).map_err(|_| de::Error::custom("invalid umask"))
 }

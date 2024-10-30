@@ -131,24 +131,26 @@ impl ProcessManager {
 
             // adding environment variables
             tmp_child.envs(&program_config.environmental_variable_to_set);
-            
+
             // adding arguments if there are any in the command section of program config
             if split_command.len() > 1 {
                 tmp_child.args(&split_command[1..]);
             }
-            
+
             // set umask
             let mut original_umask: u16 = 0;
             if program_config.umask != 0 {
                 original_umask = unsafe { libc::umask(0) };
-                unsafe  { libc::umask(program_config.umask as u16) };
+                unsafe { libc::umask(program_config.umask) };
             }
 
             // spawn the child returning if failed
             if let Err(error) = tmp_child.spawn() {
                 // Restore umask
                 if program_config.umask != 0 {
-                    unsafe { libc::umask(original_umask); }
+                    unsafe {
+                        libc::umask(original_umask);
+                    }
                 }
                 return Err(TaskmasterError::from(error));
             }
@@ -156,7 +158,9 @@ impl ProcessManager {
 
             // Restore umask
             if program_config.umask != 0 {
-                unsafe { libc::umask(original_umask); }
+                unsafe {
+                    libc::umask(original_umask);
+                }
             }
 
             // create a instance of running process with the info of this given child
