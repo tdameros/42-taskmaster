@@ -11,6 +11,7 @@
 /* -------------------------------------------------------------------------- */
 use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::time::SystemTime;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -25,7 +26,7 @@ use tokio::{
 pub enum Response {
     Success(String),
     Error(String),
-    Status(Vec<ProcessState>),
+    Status(HashMap<String, Vec<ProcessState>>),
 }
 
 /// Represent what can be send to the server as request
@@ -40,19 +41,19 @@ pub enum Request {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ProcessStatus {
-    STOPPED,
-    RUNNING,
-    STARTING,
-    FATAL(String),
+    Stopped,
+    Stopping,
+    Starting,
+    Running,
+    Fatal(String),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProcessState {
-    pub name: String,
     pub status: ProcessStatus,
     pub pid: u32,
     pub start_time: SystemTime,
-    pub shutdown_time: SystemTime,
+    pub shutdown_time: Option<SystemTime>,
 }
 
 /* -------------------------------------------------------------------------- */

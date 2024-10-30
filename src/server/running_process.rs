@@ -35,7 +35,7 @@ impl RunningProcess {
             child,
             started_since: SystemTime::now(),
             time_since_shutdown: None,
-            status: ProcessStatus::STOPPED,
+            status: ProcessStatus::Stopped,
         }
     }
 
@@ -107,7 +107,7 @@ impl RunningProcess {
         self.started_since
     }
 
-    pub(super) fn get_shutdown_time(&self) -> SystemTime {
-        self.time_since_shutdown.unwrap_or(SystemTime::now())
+    pub(super) fn get_shutdown_time(&self) -> Option<SystemTime> {
+        self.time_since_shutdown
     }
 }
