@@ -63,17 +63,30 @@ impl ProcessManager {
     fn monitor_once(&mut self, config: &Config) {
         // update inner state
         self.0.iter_mut().for_each(|(program_name, process_vec)| {
-            process_vec.iter_mut().for_each(|process| {
-                if let Some(program_config) = config.get(program_name) {
+            if let Some(program_config) = config.get(program_name) {
+                process_vec.iter_mut().for_each(|process| {
                     process.update_state(program_config);
-                }
-            });
+                });
+            }
         });
 
         // try to attain the config state
+        self.maintain_config(config);
     }
 
-    fn maintain_config(&mut self, config: &Config)
+    /// this function will try to retain / restart process to be as close to the config as possible
+    fn maintain_config(&mut self, config: &Config) {}
+
+    /// shutdown the process that are no longer part of the config
+    fn shutdown_excess(&mut self, config: &Config) {
+        self.0.iter_mut().for_each(|(program_name, process_vec)| {
+            if config.get(program_name).is_none() {
+                process_vec.iter_mut().for_each(|process| {
+                    
+                });
+            }
+        });
+    }
 
     /// this function spawn all the replica of a given program given a reference to a programs config
     pub fn spawn_program(

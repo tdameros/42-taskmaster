@@ -141,6 +141,7 @@ impl Process {
         }
 
         self.time_since_shutdown = Some(SystemTime::now());
+        self.state = ProcessState::Stopping;
         Ok(())
     }
 
