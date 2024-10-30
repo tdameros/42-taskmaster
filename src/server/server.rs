@@ -2,15 +2,14 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{
-    thread::{sleep, JoinHandle},
-    time::Duration,
-};
-
 use crate::process_manager::SharedProcessManager;
 use config::{Config, SharedConfig};
 use logger::{new_shared_logger, SharedLogger};
 use process_manager::{new_shared_process_manager, ProcessManager};
+use std::{
+    thread::{sleep, JoinHandle},
+    time::Duration,
+};
 use tcl::message::{receive, send, Request, Response};
 use tokio::net::{TcpListener, TcpStream};
 

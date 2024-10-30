@@ -90,9 +90,47 @@ impl RunningProcess {
     }
 
     /// send the given signal to the child, starting the gracefully shutdown timer
-    pub(super) fn send_signal(&mut self, _signal: &Signal) {
+    pub(super) fn send_signal(&mut self, signal: &Signal) -> Result<(), std::io::Error> {
+        let signal_number = match signal {
+            Signal::SIGABRT => libc::SIGABRT,
+            Signal::SIGALRM => libc::SIGALRM,
+            Signal::SIGBUS => libc::SIGBUS,
+            Signal::SIGCHLD => libc::SIGCHLD,
+            Signal::SIGCONT => libc::SIGCONT,
+            Signal::SIGFPE => libc::SIGFPE,
+            Signal::SIGHUP => libc::SIGHUP,
+            Signal::SIGILL => libc::SIGILL,
+            Signal::SIGINT => libc::SIGINT,
+            Signal::SIGKILL => libc::SIGKILL,
+            Signal::SIGPIPE => libc::SIGPIPE,
+            Signal::SIGPOLL => libc::SIGPOLL,
+            Signal::SIGPROF => libc::SIGPROF,
+            Signal::SIGQUIT => libc::SIGQUIT,
+            Signal::SIGSEGV => libc::SIGSEGV,
+            Signal::SIGSTOP => libc::SIGSTOP,
+            Signal::SIGSYS => libc::SIGSYS,
+            Signal::SIGTERM => libc::SIGTERM,
+            Signal::SIGTRAP => libc::SIGTRAP,
+            Signal::SIGTSTP => libc::SIGTSTP,
+            Signal::SIGTTIN => libc::SIGTTIN,
+            Signal::SIGTTOU => libc::SIGTTOU,
+            Signal::SIGUSR1 => libc::SIGUSR1,
+            Signal::SIGUSR2 => libc::SIGUSR2,
+            Signal::SIGURG => libc::SIGURG,
+            Signal::SIGVTALRM => libc::SIGVTALRM,
+            Signal::SIGXCPU => libc::SIGXCPU,
+            Signal::SIGXFSZ => libc::SIGXFSZ,
+            Signal::SIGWINCH => libc::SIGWINCH,
+        };
+
+        unsafe {
+            if libc::kill(self.child.id() as libc::pid_t, signal_number) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+        }
         // TODO use signal or other mean to send the correct signal
         self.time_since_shutdown = Some(SystemTime::now());
+        Ok(())
     }
 
     pub(super) fn get_status(&self) -> ProcessStatus {

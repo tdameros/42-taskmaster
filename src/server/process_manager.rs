@@ -172,15 +172,15 @@ impl ProcessManager {
                 match config.programs.get(name) {
                     Some(config) => {
                         // here we keep the process just sending them the signal required by the config
-                        processes.iter_mut().for_each(|process| {
+                        for process in processes.iter_mut() {
                             log_info!(
                                 logger,
                                 "about to gracefully shutdown process number : {}",
                                 process.get_child_id()
                             );
-                            process.send_signal(&config.stop_signal);
+                            process.send_signal(&config.stop_signal)?;
                             process.set_status(ProcessStatus::Stopped);
-                        });
+                        }
                         Ok(())
                     }
                     None => {
@@ -244,12 +244,22 @@ impl ProcessManager {
         self.children
             .iter_mut()
             .for_each(|(program_name, vec_running_program)| {
-                monitoring::filter_inside(
+                if let Err(error) = monitoring::filter_inside(
                     &config_access,
                     program_name,
                     vec_running_program,
                     &mut program_to_restart,
-                );
+                ) {
+                    match error {
+                        KillingChildError::NoProgramFound => unreachable!(),
+                        KillingChildError::CantKillProcess => {
+                            log_error!(
+                                logger,
+                                "Can't kill a child of process: {program_name}: {error}"
+                            );
+                        }
+                    }
+                }
             });
 
         self.monitor_restart_childs(program_to_restart, logger);
@@ -420,7 +430,7 @@ mod monitoring {
         program_name: &String,
         vec_running_program: &mut [RunningProcess],
         program_to_restart: &mut ProgramToRestart,
-    ) {
+    ) -> Result<(), KillingChildError> {
         // if the program have a config this is to prevent itering over child that can't be killed (killed because they was not in the config anymore)
         if let Some(config) = config_access.programs.get(program_name) {
             let number_of_non_stopping_process = vec_running_program
@@ -451,19 +461,19 @@ mod monitoring {
                 }
                 std::cmp::Ordering::Greater => {
                     // we need to shutdown the difference
-                    vec_running_program
-                        .iter_mut()
-                        .rev()
-                        .filter(|running_process| !running_process.has_received_shutdown_order())
-                        .for_each(|running_process| {
-                            if overflowing_process_number > 0 {
-                                running_process.send_signal(&config.stop_signal);
-                                overflowing_process_number -= 1;
-                            }
-                        });
+                    for running_process in vec_running_program.iter_mut().rev() {
+                        if overflowing_process_number == 0 {
+                            break;
+                        }
+                        if !running_process.has_received_shutdown_order() {
+                            running_process.send_signal(&config.stop_signal)?;
+                            overflowing_process_number -= 1;
+                        }
+                    }
                 }
             };
         }
+        Ok(())
     }
 }
 
