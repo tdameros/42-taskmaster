@@ -8,17 +8,19 @@ use crate::{
     logger::{Logger, SharedLogger},
     running_process::RunningProcess,
 };
+use std::process::Stdio;
 use std::{
     collections::HashMap,
     error::Error,
     fmt::Display,
+    fs,
     ops::{Deref, DerefMut, Neg},
     process::Command,
     sync::{Arc, RwLock},
     thread::{self, JoinHandle},
     time::Duration,
 };
-
+use tcl::error::TaskmasterError;
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
@@ -112,7 +114,7 @@ impl ProcessManager {
         &mut self,
         program_config: &ProgramConfig,
         name: &str,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<(), TaskmasterError> {
         // get the command and arguments
         let split_command: Vec<&str> = program_config.command.split_whitespace().collect();
 
@@ -124,6 +126,10 @@ impl ProcessManager {
                 tmp_child.current_dir(&program_config.working_directory);
             }
 
+            // adding stdout and stderr redirection
+            Self::set_command_redirection(&mut tmp_child, program_config)?;
+
+            // adding environment variables
             tmp_child.envs(&program_config.environmental_variable_to_set);
 
             // adding arguments if there are any in the command section of program config
@@ -146,6 +152,29 @@ impl ProcessManager {
                 .push(process);
         }
 
+        Ok(())
+    }
+
+    fn set_command_redirection(
+        command: &mut Command,
+        program_config: &ProgramConfig,
+    ) -> Result<(), TaskmasterError> {
+        if program_config.stdout_redirection.is_empty() {
+            command.stdout(Stdio::null());
+        } else {
+            let file = fs::OpenOptions::new()
+                .append(true)
+                .open(&program_config.stdout_redirection)?;
+            command.stdout(file);
+        }
+        if program_config.stderr_redirection.is_empty() {
+            command.stderr(Stdio::null());
+        } else {
+            let file = fs::OpenOptions::new()
+                .append(true)
+                .open(&program_config.stderr_redirection)?;
+            command.stderr(file);
+        }
         Ok(())
     }
 

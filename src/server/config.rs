@@ -67,11 +67,11 @@ pub struct ProgramConfig {
 
     /// Optional stdout redirection
     #[serde(rename = "stdout", default)]
-    stdout_redirection: String,
+    pub(super) stdout_redirection: String,
 
     /// Optional stderr redirection
     #[serde(rename = "stderr", default)]
-    stderr_redirection: String,
+    pub(super) stderr_redirection: String,
 
     /// Environment variables to set before launching the program
     #[serde(rename = "env", default)]
