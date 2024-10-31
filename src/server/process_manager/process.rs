@@ -12,9 +12,9 @@ use std::{fmt::Display, process::ExitStatus, time::SystemTime};
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
 impl Process {
-    pub(super) fn new(config: &ProgramConfig) -> Self {
+    pub(super) fn new(config: ProgramConfig) -> Self {
         Self {
-            starting_retry: config.max_number_of_restart,
+            config,
             ..Default::default()
         }
     }
@@ -87,12 +87,12 @@ impl Process {
     /// # Arguments
     ///
     /// * `program_config` - The configuration for the program, containing the grace period
-    pub(super) fn its_time_to_kill_the_child(&self, program_config: &ProgramConfig) -> bool {
+    pub(super) fn its_time_to_kill_the_child(&self) -> bool {
         self.time_since_shutdown
             .map(|shutdown_time| {
                 SystemTime::now()
                     .duration_since(shutdown_time)
-                    .map(|elapsed| elapsed.as_secs() > program_config.time_to_stop_gracefully)
+                    .map(|elapsed| elapsed.as_secs() > self.config.time_to_stop_gracefully)
                     .unwrap_or(false)
             })
             .unwrap_or(false)
@@ -108,15 +108,12 @@ impl Process {
     /// # Arguments
     ///
     /// * `program_config` - The configuration for the program, containing the start-up time
-    pub(super) fn is_no_longer_starting(
-        &self,
-        program_config: &ProgramConfig,
-    ) -> Result<bool, ProcessError> {
+    pub(super) fn is_no_longer_starting(&self) -> Result<bool, ProcessError> {
         self.started_since
             .map(|start_time| {
                 SystemTime::now()
                     .duration_since(start_time)
-                    .map(|elapsed| elapsed.as_secs() > program_config.time_to_start)
+                    .map(|elapsed| elapsed.as_secs() > self.config.time_to_start)
                     .unwrap_or(false)
             })
             .ok_or(ProcessError::NoChild)
@@ -181,11 +178,11 @@ impl Process {
     }
 
     /// check the child state and change it's status if needed
-    pub(super) fn update_state(&mut self, program_config: &ProgramConfig) {
+    pub(super) fn update_state(&mut self) {
         let result = self.get_exit_code();
         match self.state {
-            ProcessState::Starting => self.process_starting(result, program_config),
-            ProcessState::Running => self.process_running(result, program_config),
+            ProcessState::Starting => self.process_starting(result),
+            ProcessState::Running => self.process_running(result),
             ProcessState::Stopping => self.process_stopping(result),
             ProcessState::Exited
             | ProcessState::Backoff

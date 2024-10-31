@@ -3,21 +3,16 @@
 /* -------------------------------------------------------------------------- */
 
 use super::{Process, ProcessError, ProcessState};
-use crate::config::ProgramConfig;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
 impl Process {
-    pub(super) fn process_starting(
-        &mut self,
-        code: Result<Option<i32>, ProcessError>,
-        program_config: &ProgramConfig,
-    ) {
+    pub(super) fn process_starting(&mut self, code: Result<Option<i32>, ProcessError>) {
         match code {
             // the program is no longer running
-            Ok(Some(code)) => match self.is_no_longer_starting(program_config) {
-                Ok(true) => match program_config.expected_exit_code.contains(&code) {
+            Ok(Some(code)) => match self.is_no_longer_starting() {
+                Ok(true) => match self.config.expected_exit_code.contains(&code) {
                     true => self.state = ProcessState::Exited,
                     false => self.state = ProcessState::Stopped,
                 },
@@ -25,7 +20,7 @@ impl Process {
                 Err(_) => unreachable!(),
             },
             // the program is still running
-            Ok(None) => match self.is_no_longer_starting(program_config) {
+            Ok(None) => match self.is_no_longer_starting() {
                 Ok(true) => self.state = ProcessState::Running,
                 Ok(false) => {}
                 Err(_) => unreachable!(),
@@ -35,14 +30,10 @@ impl Process {
         }
     }
 
-    pub(super) fn process_running(
-        &mut self,
-        code: Result<Option<i32>, ProcessError>,
-        program_config: &ProgramConfig,
-    ) {
+    pub(super) fn process_running(&mut self, code: Result<Option<i32>, ProcessError>) {
         match code {
             // the program is not running anymore
-            Ok(Some(code)) => match program_config.expected_exit_code.contains(&code) {
+            Ok(Some(code)) => match self.config.expected_exit_code.contains(&code) {
                 true => self.state = ProcessState::Exited,
                 false => self.state = ProcessState::Stopped,
             },

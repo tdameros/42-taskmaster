@@ -1,3 +1,5 @@
+use crate::config::ProgramConfig;
+
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
@@ -23,8 +25,8 @@ pub(super) struct Process {
     /// store the state of a given process
     state: ProcessState,
 
-    /// number of retry
-    starting_retry: u32,
+    /// the config that the process is based on
+    config: ProgramConfig,
 }
 
 /// Represent the state of a given process

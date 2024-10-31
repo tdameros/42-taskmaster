@@ -45,7 +45,7 @@ pub struct ProgramConfig {
     pub(super) auto_restart: AutoRestart,
 
     /// Which return codes represent an "expected" exit status
-    #[serde(rename = "exitcodes", default)]
+    #[serde(rename = "exitcodes", default = "default_exit_code")]
     pub(super) expected_exit_code: Vec<i32>,
 
     /// How long the program should be running after it’s started for it to be considered "successfully started"
@@ -53,7 +53,6 @@ pub struct ProgramConfig {
     pub(super) time_to_start: u64,
 
     /// How many times a restart should be attempted before aborting
-    /// this is shared between replica
     #[serde(rename = "startretries", default)]
     pub(super) max_number_of_restart: u32,
 
@@ -62,7 +61,7 @@ pub struct ProgramConfig {
     pub(super) stop_signal: Signal,
 
     /// How long to wait after a graceful stop before killing the program
-    #[serde(rename = "stoptime", default)]
+    #[serde(rename = "stoptime", default = "default_graceful_shutdown")]
     pub(super) time_to_stop_gracefully: u64,
 
     /// Optional stdout redirection
@@ -76,13 +75,13 @@ pub struct ProgramConfig {
     /// Environment variables to set before launching the program
     #[serde(rename = "env", default)]
     environmental_variable_to_set: HashMap<String, String>,
-    // environmental_variable_to_set: Vec<(String, String)>,
+
     /// A working directory to set before launching the program
     #[serde(rename = "workingdir", default)]
     working_directory: String,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", default)]
+    #[serde(rename = "umask", default = "default_umask")]
     umask: u32,
 }
 
@@ -138,10 +137,6 @@ pub enum Signal {
     SIGWINCH,
 }
 
-pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Error>> {
-    Ok(Arc::new(RwLock::new(Config::load()?)))
-}
-
 /* -------------------------------------------------------------------------- */
 /*                               Implementation                               */
 /* -------------------------------------------------------------------------- */
@@ -176,4 +171,20 @@ impl DerefMut for Config {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
+}
+
+fn default_umask() -> u32 {
+    0o022
+}
+
+fn default_exit_code() -> Vec<i32> {
+    vec![0]
+}
+
+fn default_graceful_shutdown() -> u64 {
+    1
+}
+
+pub(super) fn new_shared_config() -> Result<SharedConfig, TaskmasterError> {
+    Ok(Arc::new(RwLock::new(Config::load()?)))
 }

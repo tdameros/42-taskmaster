@@ -2,7 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use super::{ProcessManager, ProgramToRestart};
+use super::{Process, ProcessManager, ProgramToRestart};
 use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_debug, log_error, log_info,
@@ -43,19 +43,16 @@ impl ProcessManager {
     fn new(config: &Config) -> Self {
         let mut result = HashMap::<String, Vec<Process>>::default();
 
-        config
-            .programs
-            .iter()
-            .for_each(|(program_name, program_config)| {
-                let mut process_vec = Vec::with_capacity(program_config.number_of_process);
-                for _ in 0..program_config.number_of_process {
-                    process_vec.push(Process::new());
-                }
-                result.insert(
-                    program_name.to_owned(),
-                    Vec::with_capacity(program_config.number_of_process),
-                );
-            });
+        config.iter().for_each(|(program_name, program_config)| {
+            let mut process_vec = Vec::with_capacity(program_config.number_of_process);
+            for _ in 0..program_config.number_of_process {
+                process_vec.push(Process::new(program_config.to_owned()));
+            }
+            result.insert(
+                program_name.to_owned(),
+                Vec::with_capacity(program_config.number_of_process),
+            );
+        });
 
         Self(result)
     }
@@ -69,21 +66,13 @@ impl ProcessManager {
                 });
             }
         });
-
-        // try to attain the config state
-        self.maintain_config(config);
     }
-
-    /// this function will try to retain / restart process to be as close to the config as possible
-    fn maintain_config(&mut self, config: &Config) {}
 
     /// shutdown the process that are no longer part of the config
     fn shutdown_excess(&mut self, config: &Config) {
         self.0.iter_mut().for_each(|(program_name, process_vec)| {
             if config.get(program_name).is_none() {
-                process_vec.iter_mut().for_each(|process| {
-                    
-                });
+                process_vec.iter_mut().for_each(|process| {});
             }
         });
     }
