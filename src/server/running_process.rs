@@ -103,6 +103,7 @@ impl RunningProcess {
             Signal::SIGINT => libc::SIGINT,
             Signal::SIGKILL => libc::SIGKILL,
             Signal::SIGPIPE => libc::SIGPIPE,
+            #[cfg(target_os = "linux")]
             Signal::SIGPOLL => libc::SIGPOLL,
             Signal::SIGPROF => libc::SIGPROF,
             Signal::SIGQUIT => libc::SIGQUIT,

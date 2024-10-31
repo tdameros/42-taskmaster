@@ -2,7 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use serde::{Deserialize, Serialize};
+use serde::de::{self, Unexpected};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
@@ -66,24 +67,24 @@ pub struct ProgramConfig {
     pub(super) time_to_stop_gracefully: u64,
 
     /// Optional stdout redirection
-    #[serde(rename = "stdout", default)]
-    stdout_redirection: String,
+    #[serde(rename = "stdout")]
+    pub(super) stdout_redirection: Option<String>,
 
     /// Optional stderr redirection
-    #[serde(rename = "stderr", default)]
-    stderr_redirection: String,
+    #[serde(rename = "stderr")]
+    pub(super) stderr_redirection: Option<String>,
 
     /// Environment variables to set before launching the program
-    #[serde(rename = "env", default)]
-    environmental_variable_to_set: HashMap<String, String>,
+    #[serde(rename = "env")]
+    pub(super) environmental_variable_to_set: Option<HashMap<String, String>>,
     // environmental_variable_to_set: Vec<(String, String)>,
     /// A working directory to set before launching the program
-    #[serde(rename = "workingdir", default)]
-    working_directory: String,
+    #[serde(rename = "workingdir")]
+    pub(super) working_directory: Option<String>,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", default)]
-    umask: u32,
+    #[serde(rename = "umask", deserialize_with = "parse_umask")]
+    pub(super) umask: Option<libc::mode_t>,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -117,6 +118,7 @@ pub enum Signal {
     SIGINT,
     SIGKILL,
     SIGPIPE,
+    #[cfg(target_os = "linux")]
     SIGPOLL,
     SIGPROF,
     SIGQUIT,
@@ -145,6 +147,7 @@ pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Er
 /* -------------------------------------------------------------------------- */
 /*                               Implementation                               */
 /* -------------------------------------------------------------------------- */
+
 impl Config {
     /// create a config base on the file located in the root of the project
     pub fn load() -> Result<Self, TaskmasterError> {
@@ -152,6 +155,26 @@ impl Config {
         let contents = fs::read_to_string(path)?;
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
+    }
+}
+
+fn parse_umask<'de, D>(deserializer: D) -> Result<Option<libc::mode_t>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let umask_deserialize = Option::<String>::deserialize(deserializer)?;
+    if let Some(umask_str) = umask_deserialize {
+        if !umask_str.chars().all(|c| ('0'..='7').contains(&c)) {
+            return Err(de::Error::invalid_value(
+                Unexpected::Str(&umask_str),
+                &"octal number",
+            ));
+        }
+        libc::mode_t::from_str_radix(&umask_str, 8)
+            .map(Some)
+            .map_err(|_| de::Error::custom("invalid umask"))
+    } else {
+        Ok(None)
     }
 }
 

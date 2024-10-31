@@ -8,16 +8,19 @@ use crate::{
     logger::{Logger, SharedLogger},
     running_process::RunningProcess,
 };
+use std::process::Stdio;
 use std::{
     collections::HashMap,
     error::Error,
     fmt::Display,
+    fs,
     ops::{Deref, DerefMut, Neg},
     process::Command,
     sync::{Arc, RwLock},
     thread::{self, JoinHandle},
     time::Duration,
 };
+use tcl::error::TaskmasterError;
 use tcl::message::{ProcessState, ProcessStatus};
 
 /* -------------------------------------------------------------------------- */
@@ -113,7 +116,7 @@ impl ProcessManager {
         &mut self,
         program_config: &ProgramConfig,
         name: &str,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<(), TaskmasterError> {
         // get the command and arguments
         let split_command: Vec<&str> = program_config.command.split_whitespace().collect();
 
@@ -121,31 +124,87 @@ impl ProcessManager {
             // create the command using the command property given by the program config
             let mut tmp_child = Command::new(split_command.first().expect("Unreachable"));
 
-            // TODO change the pwd according to the config
+            if let Some(working_directory) = &program_config.working_directory {
+                tmp_child.current_dir(working_directory);
+            }
 
-            // TODO add env variable
+            // adding stdout and stderr redirection
+            Self::set_command_redirection(&mut tmp_child, program_config)?;
+
+            // adding environment variables
+            if let Some(env_variables) = &program_config.environmental_variable_to_set {
+                tmp_child.envs(env_variables);
+            }
 
             // adding arguments if there are any in the command section of program config
             if split_command.len() > 1 {
                 tmp_child.args(&split_command[1..]);
             }
 
-            // TODO stdout and err redirection
+            // set umask
+            let mut original_umask: libc::mode_t = 0;
+            if let Some(umask) = &program_config.umask {
+                original_umask = Self::set_umask(*umask);
+            }
 
             // spawn the child returning if failed
-            let child = tmp_child.spawn()?;
+            match tmp_child.spawn() {
+                Ok(child) => {
+                    // Restore umask
+                    if program_config.umask.is_some() {
+                        Self::set_umask(original_umask);
+                    }
 
-            // create a instance of running process with the info of this given child
-            let mut process = RunningProcess::new(child);
-            process.set_status(ProcessStatus::Running);
+                    // create a instance of running process with the info of this given child
+                    let mut process = RunningProcess::new(child);
+                    process.set_status(ProcessStatus::Running);
 
-            // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
-            self.children
-                .entry(name.to_string())
-                .or_default()
-                .push(process);
+                    // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
+                    self.children
+                        .entry(name.to_string())
+                        .or_default()
+                        .push(process);
+                }
+                Err(error) => {
+                    // Restore umask
+                    if program_config.umask.is_some() {
+                        Self::set_umask(original_umask);
+                    }
+                    return Err(TaskmasterError::from(error));
+                }
+            }
         }
 
+        Ok(())
+    }
+
+    // Set new umask and return the previous value
+    fn set_umask(new_umask: libc::mode_t) -> libc::mode_t {
+        unsafe { libc::umask(new_umask) }
+    }
+
+    fn set_command_redirection(
+        command: &mut Command,
+        program_config: &ProgramConfig,
+    ) -> Result<(), TaskmasterError> {
+        match &program_config.stdout_redirection {
+            Some(stdout) => {
+                let file = fs::OpenOptions::new().append(true).open(stdout)?;
+                command.stdout(file);
+            }
+            None => {
+                command.stdout(Stdio::null());
+            }
+        }
+        match &program_config.stderr_redirection {
+            Some(stderr) => {
+                let file = fs::OpenOptions::new().append(true).open(stderr)?;
+                command.stderr(file);
+            }
+            None => {
+                command.stderr(Stdio::null());
+            }
+        }
         Ok(())
     }
 
