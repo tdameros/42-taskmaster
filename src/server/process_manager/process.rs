@@ -6,7 +6,12 @@ use super::{Process, ProcessError, ProcessState};
 use crate::config::{ProgramConfig, Signal};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
-use std::{fmt::Display, process::ExitStatus, time::SystemTime};
+use std::{
+    fmt::Display,
+    fs,
+    process::{Command, ExitStatus, Stdio},
+    time::SystemTime,
+};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -56,8 +61,12 @@ impl Process {
     }
 
     /// return the child process_id if the child is running
-    pub(super) fn get_child_id(&self) -> Option<u32> {
-        self.child.as_ref().and_then(|child| Some(child.id()))
+    pub(super) fn get_child_id(&mut self) -> Option<u32> {
+        let exit_code = self.get_exit_code();
+        self.child.as_ref().and_then(|child| match exit_code {
+            Ok(None) => Some(child.id()),
+            Ok(Some(_)) | Err(_) => None,
+        })
     }
 
     /// Attempts to send a SIGKILL to the child process.
@@ -74,7 +83,11 @@ impl Process {
             .and_then(|child| {
                 child
                     .kill()
-                    .map_err(|error| ProcessError::CantKillProcess(error))
+                    .map_err(|error| {
+                        self.state = ProcessState::Stopping;
+                        ProcessError::CantKillProcess(error)
+                    })
+                    .map(|_| self.state = ProcessState::Stopped)
             })
     }
 
@@ -181,23 +194,134 @@ impl Process {
     /// check the child state and change it's status if needed
     pub(super) fn update_state(&mut self) {
         let result = self.get_exit_code();
+        use ProcessState as PS;
         match self.state {
-            ProcessState::Starting => self.process_starting(result),
-            ProcessState::Running => self.process_running(result),
-            ProcessState::Stopping => self.process_stopping(result),
-            ProcessState::Exited
-            | ProcessState::Backoff
-            | ProcessState::Stopped
-            | ProcessState::Fatal
-            | ProcessState::Unknown => {
+            PS::Starting => self.update_starting(result),
+            PS::Running => self.update_running(result),
+            PS::Stopping => self.update_stopping(result),
+            PS::Exited
+            | PS::Backoff
+            | PS::Stopped
+            | PS::Fatal
+            | PS::NeverStartedYet
+            | PS::Unknown => {
                 // no update exit status can trigger a change in state only manual or configured restart can
             }
         }
     }
 
-    /// set the state of the child, this is intended to be use responsibly and with confidence
-    pub(super) fn set_state(&mut self, state: ProcessState) {
-        self.state = state;
+    pub(super) fn react_to_program_state(&mut self) {
+        self.update_state();
+        use ProcessState as PS;
+        match self.state {
+            PS::NeverStartedYet => todo!(),
+            PS::Stopped => todo!(),
+            PS::Starting => todo!(),
+            PS::Running => todo!(),
+            PS::Backoff => todo!(),
+            PS::Stopping => todo!(),
+            PS::Exited => todo!(),
+            PS::Fatal => todo!(),
+            PS::Unknown => todo!(),
+        }
+    }
+
+    /// this function attempt to spawn a child
+    pub(super) fn start(&mut self) -> Result<(), ProcessError> {
+        // create an iterator over the arguments
+        let mut split_command = self.config.command.split_whitespace();
+
+        // get the command or return an error
+        let program = split_command.next().ok_or(ProcessError::NoCommand)?;
+
+        // set the command to execute
+        let mut command = Command::new(program);
+
+        // set the working directory
+        if let Some(dir) = &self.config.working_directory {
+            command.current_dir(dir);
+        }
+
+        // adding stdout and stderr redirection
+        self.set_command_redirection(&mut command)
+            .map_err(ProcessError::FailedToCreateRedirection)?;
+
+        // adding environment variables
+        if let Some(env_vars) = &self.config.environmental_variable_to_set {
+            command.envs(env_vars);
+        }
+
+        // set the arguments
+        command.args(split_command);
+
+        // set umask
+        let original_umask: Option<libc::mode_t> = self.config.umask.map(Self::set_umask);
+
+        let child = command.spawn().map_err(ProcessError::CouldNotSpawnChild)?;
+
+        // Restore umask regardless of spawn result
+        if let Some(umask) = original_umask {
+            Self::set_umask(umask);
+        }
+
+        self.child = Some(child);
+        self.state = ProcessState::Starting;
+        
+        Ok(())
+
+            let mut original_umask: libc::mode_t = 0;
+            if let Some(umask) = self.config.umask {
+                original_umask = Self::set_umask(umask);
+            }
+
+            // spawn the child returning if failed
+            match tmp_child.spawn() {
+                Ok(child) => {
+                    // Restore umask
+                    if self.config.umask.is_some() {
+                        Self::set_umask(original_umask);
+                    }
+
+                    // set the child
+                    self.child = Some(child);
+                    self.state = ProcessState::Starting;
+                }
+                Err(error) => {
+                    // Restore umask
+                    if self.config.umask.is_some() {
+                        Self::set_umask(original_umask);
+                    }
+                    return Err(ProcessError::CouldNotSpawnChild(error));
+                }
+            };
+
+    }
+
+    /// Set new umask and return the previous value
+    fn set_umask(new_umask: libc::mode_t) -> libc::mode_t {
+        unsafe { libc::umask(new_umask) }
+    }
+
+    fn set_command_redirection(&self, command: &mut Command) -> Result<(), std::io::Error> {
+        match self.config.stdout_redirection.as_ref() {
+            Some(stdout) => {
+                let file = fs::OpenOptions::new().append(true).open(stdout)?;
+                command.stdout(file);
+            }
+            None => {
+                command.stdout(Stdio::null());
+            }
+        }
+        match self.config.stderr_redirection.as_ref() {
+            Some(stderr) => {
+                let file = fs::OpenOptions::new().append(true).open(stderr)?;
+                command.stderr(file);
+            }
+            None => {
+                command.stderr(Stdio::null());
+            }
+        }
+        Ok(())
     }
 }
 

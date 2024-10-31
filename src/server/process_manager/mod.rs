@@ -27,13 +27,20 @@ pub(super) struct Process {
 
     /// the config that the process is based on
     config: ProgramConfig,
+
+    /// indicate whether this program must be kept in adequation with
+    /// the config or shutdown and remove
+    must_be_removed: bool,
 }
 
 /// Represent the state of a given process
 #[derive(Debug, Default)]
 enum ProcessState {
-    /// the default state, The process has been stopped due to a stop request or has never been started.
+    /// the default state, has never been started.
     #[default]
+    NeverStartedYet,
+
+    /// The process has been stopped due to a stop request
     Stopped,
 
     /// The process is starting due to a start request.
@@ -67,11 +74,22 @@ enum ProcessError {
     ExitStatusNotFound(std::io::Error),
     CantKillProcess(std::io::Error),
     Signal(std::io::Error),
+    /// if no command was found to start the child
+    NoCommand,
+    CouldNotSpawnChild(std::io::Error),
+    FailedToCreateRedirection(std::io::Error),
 }
 
 /// this represent the running process
 #[derive(Debug)]
-pub(super) struct ProcessManager(std::collections::HashMap<String, Vec<Process>>);
+pub(super) struct ProcessManager {
+    /// represent the currently monitored programs
+    programs: std::collections::HashMap<String, Vec<Process>>,
+
+    /// the place were programs go we they are no longer part of the config
+    /// and we nee to wait for them to shutdown
+    purgatory: std::collections::HashMap<String, Vec<Process>>,
+}
 
 /// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
 pub(super) type SharedProcessManager = std::sync::Arc<std::sync::RwLock<ProcessManager>>;

@@ -2,7 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use super::{Process, ProcessManager, ProgramToRestart};
+use super::{Process, ProcessManager, ProcessState, ProgramToRestart};
 use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_debug, log_error, log_info,
@@ -61,11 +61,83 @@ impl ProcessManager {
 
     fn monitor_once(&mut self) {
         // update inner state
+        self.update_program_state();
+    }
+
+    /// this function will reacted to programs states according to there config
+    fn react_to_program_state(&mut self, config: &Config) {
+        let mut entry_to_remove = Vec::new();
+        self.0.iter_mut().for_each(|(program_name, process_vec)| {
+            match config.get(program_name) {
+                Some(_) => todo!(),
+                None => {
+                    // here we only check if the process_vec is empty if not we check if we should kill the still stopping process
+                    match process_vec.is_empty() {
+                        true => entry_to_remove.push(program_name),
+                        false => todo!(),
+                    }
+                }
+            }
+        });
+        entry_to_remove.iter().for_each(|entry| self.0.re);
+    }
+
+    fn update_program_state(&mut self) {
         self.0.iter_mut().for_each(|(_, process_vec)| {
             process_vec.iter_mut().for_each(|process| {
                 process.update_state();
             });
         });
+    }
+
+    /// try to conform to the new config
+    fn reload_config(&mut self, config: &Config) {
+        // we actualize the process state
+        self.update_program_state();
+        // we clear stopped process and shutdown others
+        self.clean_and_stop_process(config); // pass this all process are gone only stopped and stopping one remained
+                                             // they will eventually get removed by the monitor_once
+    }
+
+    /// this function clear the Stopped program that are no longer part of the config and shutdown the running one
+    fn clean_and_stop_process(&mut self, config: &Config) {
+        self.0
+            .iter_mut()
+            .filter(|&(program_name, _)| config.get(program_name).is_none())
+            .for_each(|(_, process_vec)| {
+                use ProcessState as PS;
+                process_vec.retain_mut(|process| match process.state {
+                    PS::Starting | PS::Running => {
+                        let signal = process.config.stop_signal.clone();
+                        let _ = process.send_signal(&signal).or_else(|_| process.kill()); // here NoChild is unreachable and if we can't stop the process we'll kill him.
+                        true
+                    }
+                    PS::Stopping => true,
+                    PS::Stopped
+                    | PS::NeverStartedYet
+                    | PS::Backoff
+                    | PS::Exited
+                    | PS::Fatal
+                    | PS::Unknown => false,
+                });
+                process_vec.retain_mut(|process| match process.state {
+                    PS::Stopping => true,
+                    PS::Stopped => false,
+
+                    PS::NeverStartedYet
+                    | PS::Backoff
+                    | PS::Exited
+                    | PS::Fatal
+                    | PS::Unknown
+                    | PS::Running
+                    | PS::Starting => unreachable!(),
+                });
+            });
+        self.0
+            .retain(|_, process_vec| match process_vec.is_empty() {
+                true => false,
+                false => {}
+            });
     }
 
     /// shutdown the process that are no longer part of the config
@@ -96,105 +168,6 @@ impl ProcessManager {
                 );
             }
         }
-    }
-
-    /// this function spawn a child given the program config for a program it then insert a newly created
-    /// running process struct into the vec of running process for the given program name in self,
-    /// creating it if it doesn't exist yet
-    fn spawn_child(
-        &mut self,
-        program_config: &ProgramConfig,
-        name: &str,
-    ) -> Result<(), TaskmasterError> {
-        // get the command and arguments
-        let split_command: Vec<&str> = program_config.command.split_whitespace().collect();
-
-        if !split_command.is_empty() {
-            // create the command using the command property given by the program config
-            let mut tmp_child = Command::new(split_command.first().expect("Unreachable"));
-
-            if let Some(working_directory) = &program_config.working_directory {
-                tmp_child.current_dir(working_directory);
-            }
-
-            // adding stdout and stderr redirection
-            Self::set_command_redirection(&mut tmp_child, program_config)?;
-
-            // adding environment variables
-            if let Some(env_variables) = &program_config.environmental_variable_to_set {
-                tmp_child.envs(env_variables);
-            }
-
-            // adding arguments if there are any in the command section of program config
-            if split_command.len() > 1 {
-                tmp_child.args(&split_command[1..]);
-            }
-
-            // set umask
-            let mut original_umask: libc::mode_t = 0;
-            if let Some(umask) = &program_config.umask {
-                original_umask = Self::set_umask(*umask);
-            }
-
-            // spawn the child returning if failed
-            match tmp_child.spawn() {
-                Ok(child) => {
-                    // Restore umask
-                    if program_config.umask.is_some() {
-                        Self::set_umask(original_umask);
-                    }
-
-                    // create a instance of running process with the info of this given child
-                    let mut process = RunningProcess::new(child);
-                    process.set_status(ProcessStatus::Starting);
-
-                    // insert the running process newly created to self at the end of the vector of running process for the given program name entry, creating a new empty vector if none where found
-                    self.children
-                        .entry(name.to_string())
-                        .or_default()
-                        .push(process);
-                }
-                Err(error) => {
-                    // Restore umask
-                    if program_config.umask.is_some() {
-                        Self::set_umask(original_umask);
-                    }
-                    return Err(TaskmasterError::from(error));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    // Set new umask and return the previous value
-    fn set_umask(new_umask: libc::mode_t) -> libc::mode_t {
-        unsafe { libc::umask(new_umask) }
-    }
-
-    fn set_command_redirection(
-        command: &mut Command,
-        program_config: &ProgramConfig,
-    ) -> Result<(), TaskmasterError> {
-        match &program_config.stdout_redirection {
-            Some(stdout) => {
-                let file = fs::OpenOptions::new().append(true).open(stdout)?;
-                command.stdout(file);
-            }
-            None => {
-                command.stdout(Stdio::null());
-            }
-        }
-        match &program_config.stderr_redirection {
-            Some(stderr) => {
-                let file = fs::OpenOptions::new().append(true).open(stderr)?;
-                command.stderr(file);
-            }
-            None => {
-                command.stderr(Stdio::null());
-            }
-        }
-        Ok(())
     }
 
     /// shutdown all child of a given process if no child exist for the given program name the function does nothing
