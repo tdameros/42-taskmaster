@@ -57,14 +57,12 @@ impl ProcessManager {
         Self(result)
     }
 
-    fn monitor_once(&mut self, config: &Config) {
+    fn monitor_once(&mut self) {
         // update inner state
-        self.0.iter_mut().for_each(|(program_name, process_vec)| {
-            if let Some(program_config) = config.get(program_name) {
-                process_vec.iter_mut().for_each(|process| {
-                    process.update_state(program_config);
-                });
-            }
+        self.0.iter_mut().for_each(|(_, process_vec)| {
+            process_vec.iter_mut().for_each(|process| {
+                process.update_state();
+            });
         });
     }
 
@@ -210,7 +208,7 @@ impl ProcessManager {
     ) -> Result<JoinHandle<()>, std::io::Error> {
         let shared = Arc::new(RwLock::new(self));
         thread::Builder::new().spawn(move || loop {
-            self.monitor_once(&shared_config.read().unwrap());
+            self.monitor_once();
             thread::sleep(refresh_period);
         })
     }
