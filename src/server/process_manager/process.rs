@@ -3,7 +3,10 @@
 /* -------------------------------------------------------------------------- */
 
 use super::{Process, ProcessError, ProcessState};
-use crate::config::{ProgramConfig, Signal};
+use crate::{
+    config::{ProgramConfig, Signal},
+    logger::Logger,
+};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::{
@@ -192,9 +195,11 @@ impl Process {
     }
 
     /// check the child state and change it's status if needed
-    pub(super) fn update_state(&mut self) {
-        let result = self.get_exit_code();
+    pub(super) fn update_state(&mut self) -> Result<(), ProcessError> {
         use ProcessState as PS;
+        let result = self
+            .get_exit_code()
+            .inspect_err(|e| self.state = PS::Unknown)?;
         match self.state {
             PS::Starting => self.update_starting(result),
             PS::Running => self.update_running(result),
@@ -207,25 +212,27 @@ impl Process {
             | PS::Unknown => {
                 // no update exit status can trigger a change in state only manual or configured restart can
             }
-        }
+        };
+
+        Ok(())
     }
 
-    pub(super) fn react_to_program_state(&mut self) {
+    pub(super) fn react_to_program_state(&mut self) -> Result<(), ProcessError> {
         self.update_state();
         use ProcessState as PS;
         match self.state {
             PS::NeverStartedYet => self.react_never_started_yet(),
             PS::Stopped => self.react_stopped(),
             PS::Backoff => self.react_backoff(),
-            PS::Stopping => todo!(),
-            PS::Exited => todo!(),
+            PS::Stopping => self.react_stopping(),
+            PS::ExitedExpectedly => todo!(),
+            PS::ExitedUnExpectedly => todo!(),
             PS::Fatal => todo!(),
             PS::Unknown => todo!(),
-            PS::Starting |
-            PS::Running => {},
+            PS::Starting | PS::Running => {}
         }
     }
-    
+
     /// this function attempt to spawn a child if successful it will set the appropriate state
     /// # Returns
     /// - `Ok(())` if the child was spawn successfully
@@ -254,7 +261,7 @@ impl Process {
 
         self.child = Some(child);
         self.state = ProcessState::Starting;
-        
+
         Ok(())
     }
 
@@ -290,7 +297,6 @@ impl Process {
     pub(super) fn clean_child(&mut self) {
         self.child = None;
     }
-
 }
 
 /* -------------------------------------------------------------------------- */

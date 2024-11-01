@@ -58,8 +58,11 @@ enum ProcessState {
     /// The process is stopping due to a stop request.
     Stopping,
 
-    /// The process exited from the RUNNING state (expectedly or unexpectedly).
-    Exited,
+    /// The process exited from the RUNNING state expectedly.
+    ExitedExpectedly,
+
+    /// The process exited from the RUNNING state unexpectedly.
+    ExitedUnExpectedly,
 
     /// The process could not be started successfully.
     Fatal,
