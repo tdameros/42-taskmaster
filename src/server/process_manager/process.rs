@@ -214,52 +214,40 @@ impl Process {
         self.update_state();
         use ProcessState as PS;
         match self.state {
-            PS::NeverStartedYet => todo!(),
-            PS::Stopped => todo!(),
-            PS::Starting => todo!(),
-            PS::Running => todo!(),
-            PS::Backoff => todo!(),
+            PS::NeverStartedYet => self.react_never_started_yet(),
+            PS::Stopped => self.react_stopped(),
+            PS::Backoff => self.react_backoff(),
             PS::Stopping => todo!(),
             PS::Exited => todo!(),
             PS::Fatal => todo!(),
             PS::Unknown => todo!(),
+            PS::Starting |
+            PS::Running => {},
         }
     }
-
-    /// this function attempt to spawn a child
+    
+    /// this function attempt to spawn a child if successful it will set the appropriate state
+    /// # Returns
+    /// - `Ok(())` if the child was spawn successfully
+    /// - `Err(ProcessError::NoCommand)` if the command argument is empty.
+    /// - `Err(ProcessError::FailedToCreateRedirection)` if the redirection argument couldn't be accessed found or create.
+    /// - `Err(ProcessError::CouldNotSpawnChild)` if the child was not able to be spawned
     pub(super) fn start(&mut self) -> Result<(), ProcessError> {
-        // create an iterator over the arguments
         let mut split_command = self.config.command.split_whitespace();
-
-        // get the command or return an error
         let program = split_command.next().ok_or(ProcessError::NoCommand)?;
-
-        // set the command to execute
+        let original_umask: Option<libc::mode_t> = self.config.umask.map(Self::set_umask);
         let mut command = Command::new(program);
 
-        // set the working directory
+        command.envs(&self.config.environmental_variable_to_set);
+        command.args(split_command);
         if let Some(dir) = &self.config.working_directory {
             command.current_dir(dir);
         }
-
-        // adding stdout and stderr redirection
         self.set_command_redirection(&mut command)
             .map_err(ProcessError::FailedToCreateRedirection)?;
 
-        // adding environment variables
-        if let Some(env_vars) = &self.config.environmental_variable_to_set {
-            command.envs(env_vars);
-        }
-
-        // set the arguments
-        command.args(split_command);
-
-        // set umask
-        let original_umask: Option<libc::mode_t> = self.config.umask.map(Self::set_umask);
-
         let child = command.spawn().map_err(ProcessError::CouldNotSpawnChild)?;
 
-        // Restore umask regardless of spawn result
         if let Some(umask) = original_umask {
             Self::set_umask(umask);
         }
@@ -268,33 +256,6 @@ impl Process {
         self.state = ProcessState::Starting;
         
         Ok(())
-
-            let mut original_umask: libc::mode_t = 0;
-            if let Some(umask) = self.config.umask {
-                original_umask = Self::set_umask(umask);
-            }
-
-            // spawn the child returning if failed
-            match tmp_child.spawn() {
-                Ok(child) => {
-                    // Restore umask
-                    if self.config.umask.is_some() {
-                        Self::set_umask(original_umask);
-                    }
-
-                    // set the child
-                    self.child = Some(child);
-                    self.state = ProcessState::Starting;
-                }
-                Err(error) => {
-                    // Restore umask
-                    if self.config.umask.is_some() {
-                        Self::set_umask(original_umask);
-                    }
-                    return Err(ProcessError::CouldNotSpawnChild(error));
-                }
-            };
-
     }
 
     /// Set new umask and return the previous value
@@ -323,6 +284,13 @@ impl Process {
         }
         Ok(())
     }
+
+    /// this function simply set the child to None
+    /// not if this is use while the child is alive it will create a zombie process
+    pub(super) fn clean_child(&mut self) {
+        self.child = None;
+    }
+
 }
 
 /* -------------------------------------------------------------------------- */

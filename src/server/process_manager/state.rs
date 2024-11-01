@@ -27,7 +27,7 @@ impl Process {
             },
             // we don't know the state of the child anymore
             Err(_) => self.state = ProcessState::Unknown,
-        }
+        };
     }
 
     pub(super) fn update_running(&mut self, code: Result<Option<i32>, ProcessError>) {
@@ -41,7 +41,7 @@ impl Process {
             Ok(None) => {}
             // we don't know the state of the child anymore
             Err(_) => self.state = ProcessState::Unknown,
-        }
+        };
     }
 
     pub(super) fn update_stopping(&mut self, code: Result<Option<i32>, ProcessError>) {
@@ -55,12 +55,34 @@ impl Process {
             }
             // we don't know the state of the child anymore
             Err(_) => self.state = ProcessState::Unknown,
-        }
+        };
     }
 
     pub(super) fn react_never_started_yet(&mut self) {
         if self.config.start_at_launch {
             self.start();
         }
+    }
+
+    pub(super) fn react_stopped(&mut self) {
+        self.clean_child();
+    }
+
+    pub(super) fn react_backoff(&mut self) {
+        use std::cmp::Ordering as O;
+        match self.number_of_restart.cmp(&self.config.max_number_of_restart) {
+            O::Less => {
+                self.clean_child();
+                match self.start() {
+                    Ok(_) => self.number_of_restart += 1,
+                    Err(_) => self.state = ProcessState::Fatal,
+                };
+            },
+            O::Equal |
+            O::Greater => {
+                self.state = ProcessState::Fatal;
+                self.clean_child();
+            },
+        };
     }
 }

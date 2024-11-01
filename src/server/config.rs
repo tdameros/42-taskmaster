@@ -74,7 +74,7 @@ pub struct ProgramConfig {
 
     /// Environment variables to set before launching the program
     #[serde(rename = "env")]
-    pub(super) environmental_variable_to_set: Option<HashMap<String, String>>,
+    pub(super) environmental_variable_to_set: HashMap<String, String>,
     // environmental_variable_to_set: Vec<(String, String)>,
     /// A working directory to set before launching the program
     #[serde(rename = "workingdir")]
@@ -195,7 +195,7 @@ impl DerefMut for Config {
     }
 }
 
-fn default_umask() -> u32 {
+fn default_umask() -> libc::mode_t {
     0o022
 }
 

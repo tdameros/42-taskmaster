@@ -31,6 +31,8 @@ pub(super) struct Process {
     /// indicate whether this program must be kept in adequation with
     /// the config or shutdown and remove
     must_be_removed: bool,
+
+    number_of_restart: u32,
 }
 
 /// Represent the state of a given process
