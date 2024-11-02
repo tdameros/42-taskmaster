@@ -13,22 +13,22 @@ impl Process {
             // the program is no longer running
             Some(code) => {
                 match self.is_no_longer_starting() {
-                    Ok(true) => {
+                    Some(true) => {
                         match self.config.expected_exit_code.contains(&code) {
                             true => self.state = ProcessState::ExitedExpectedly,
                             false => self.state = ProcessState::ExitedUnExpectedly,
                         };
                     }
-                    Ok(false) => self.state = ProcessState::Backoff,
-                    Err(_) => unreachable!(),
+                    Some(false) => self.state = ProcessState::Backoff,
+                    None => unreachable!(),
                 };
                 self.clean_child();
             }
             // the program is still running
             None => match self.is_no_longer_starting() {
-                Ok(true) => self.state = ProcessState::Running,
-                Ok(false) => {}
-                Err(_) => unreachable!(),
+                Some(true) => self.state = ProcessState::Running,
+                Some(false) => {}
+                None => unreachable!(),
             },
         };
     }
@@ -71,9 +71,9 @@ impl Process {
                 self.clean_child();
             }
             None => match self.is_no_longer_starting() {
-                Ok(true) => self.state = ProcessState::Running,
-                Ok(false) => self.state = ProcessState::Starting,
-                Err(_) => unreachable!(),
+                Some(true) => self.state = ProcessState::Running,
+                Some(false) => self.state = ProcessState::Starting,
+                None => unreachable!(),
             },
         }
     }

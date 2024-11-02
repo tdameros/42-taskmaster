@@ -81,7 +81,7 @@ enum ProcessError {
     NoChild,
     ExitStatusNotFound(std::io::Error),
     CantKillProcess(std::io::Error),
-    /// ??
+    /// an error has occurred while sending a signal to a child
     Signal(std::io::Error),
     /// if no command was found to start the child
     NoCommand,

@@ -88,9 +88,8 @@ impl Process {
     ///
     /// # Errors
     ///
-    /// Returns a `ProcessError` if:
-    /// - There is no child process (`ProcessError::NoChild`)
-    /// - The kill operation fails, possibly due to lack of privileges (`ProcessError::CantKillProcess`)
+    /// - `ProcessError::NoChild` if there were no child process
+    /// - `ProcessError::CantKillProcess` if we couldn't kill the process
     pub(super) fn kill(&mut self) -> Result<(), ProcessError> {
         self.child
             .as_mut()
@@ -129,22 +128,16 @@ impl Process {
     /// Determines if the program has completed its starting phase.
     ///
     /// Returns:
-    /// - `Ok(true)` if the process has started and the time elapsed since it started exceeds the configured start-up time.
-    /// - `Ok(false)` if the process has started but hasn't exceeded the start-up time yet.
-    /// - `Err(ProcessError::NotStarted)` if the process hasn't been started.
-    ///
-    /// # Arguments
-    ///
-    /// * `program_config` - The configuration for the program, containing the start-up time
-    pub(super) fn is_no_longer_starting(&self) -> Result<bool, ProcessError> {
-        self.started_since
-            .map(|start_time| {
-                SystemTime::now()
-                    .duration_since(start_time)
-                    .map(|elapsed| elapsed.as_secs() > self.config.time_to_start)
-                    .unwrap_or(false)
-            })
-            .ok_or(ProcessError::NoChild)
+    /// - `Some(true)` if the process has started and the time elapsed since it started exceeds the configured start-up time.
+    /// - `Some(false)` if the process has started but hasn't exceeded the start-up time yet.
+    /// - `None` if no starting time were found (AKA the program is not running).
+    pub(super) fn is_no_longer_starting(&self) -> Option<bool> {
+        self.started_since.map(|start_time| {
+            SystemTime::now()
+                .duration_since(start_time)
+                .map(|elapsed| elapsed.as_secs() > self.config.time_to_start)
+                .unwrap_or(false)
+        })
     }
 
     /// Send the given signal to the child, starting the graceful shutdown timer.
@@ -155,10 +148,8 @@ impl Process {
     /// - There is no child process (`ProcessError::NoChild`)
     /// - The signal sending operation fails (`ProcessError::SignalError`)
     pub(super) fn send_signal(&mut self, signal: &Signal) -> Result<(), ProcessError> {
-        let signal_number = Self::signal_to_libc(signal);
-
         let child = self.child.as_ref().ok_or(ProcessError::NoChild)?;
-
+        let signal_number = Self::signal_to_libc(signal);
         let result = unsafe { libc::kill(child.id() as libc::pid_t, signal_number as libc::c_int) };
 
         if result == -1 {
@@ -246,18 +237,29 @@ impl Process {
         }
     }
 
-    /// thi function use the config to see if some cleaning or restarting need to happened
+    /// this function use the config to see if some cleaning or restarting need to happened
+    /// it also call the update_state function before it so that the state we are working
+    /// with are the more accurate possible
+    ///
+    /// Returns:
+    /// - `Ok(())` if the exit_status could be acquire without issue and the state
+    /// and change that need to be done were done.
+    /// - `Err(ProcessError::ExitStatusNotFound)` if the exit status could not be read.
+    /// - `Err(ProcessError::NoCommand)` if the command argument is empty.
+    /// - `Err(ProcessError::FailedToCreateRedirection)` if the redirection argument couldn't be accessed found or create.
+    /// - `Err(ProcessError::CouldNotSpawnChild)` if the child was not able to be spawned
+    /// - `Err(ProcessError::NoChild)` if there were no child process
+    /// - `Err(ProcessError::CantKillProcess)` if we couldn't kill the process
     pub(super) fn react_to_program_state(&mut self) -> Result<(), ProcessError> {
         self.update_state()?;
         use ProcessState as PS;
         match self.state {
             PS::NeverStartedYet => self.react_never_started_yet(),
-            PS::Stopped => Ok(()),
             PS::Backoff => self.react_backoff(),
             PS::Stopping => self.react_stopping(),
             PS::ExitedExpectedly => self.react_expected_exit(),
             PS::ExitedUnExpectedly => self.react_unexpected_exit(),
-            PS::Fatal | PS::Starting | PS::Running => Ok(()),
+            PS::Fatal | PS::Starting | PS::Running | PS::Stopped => Ok(()),
             PS::Unknown => unreachable!(
                 "as long as we return the error of update_state call before this match block"
             ),
@@ -293,6 +295,7 @@ impl Process {
         self.child = Some(child);
         self.state = ProcessState::Starting;
         self.started_since = Some(SystemTime::now());
+        self.time_since_shutdown = None;
 
         Ok(())
     }
