@@ -38,8 +38,8 @@ impl Process {
             // the program is not running anymore
             Some(code) => {
                 match self.config.expected_exit_code.contains(&code) {
-                    true => self.state = ProcessState::Exited,
-                    false => self.state = ProcessState::Stopped,
+                    true => self.state = ProcessState::ExitedExpectedly,
+                    false => self.state = ProcessState::ExitedUnExpectedly,
                 };
                 self.clean_child();
             }
@@ -61,16 +61,27 @@ impl Process {
         };
     }
 
+    pub(super) fn update_unknown(&mut self, code: Option<i32>) {
+        match code {
+            Some(code) => {
+                match self.config.expected_exit_code.contains(&code) {
+                    true => self.state = ProcessState::ExitedExpectedly,
+                    false => self.state = ProcessState::ExitedUnExpectedly,
+                };
+                self.clean_child();
+            }
+            None => match self.is_no_longer_starting() {
+                Ok(true) => self.state = ProcessState::Running,
+                Ok(false) => self.state = ProcessState::Starting,
+                Err(_) => unreachable!(),
+            },
+        }
+    }
+
     pub(super) fn react_never_started_yet(&mut self) -> Result<(), ProcessError> {
         if self.config.start_at_launch {
             self.start()?;
         }
-
-        Ok(())
-    }
-
-    pub(super) fn react_stopped(&mut self) -> Result<(), ProcessError> {
-        self.clean_child();
 
         Ok(())
     }
@@ -81,15 +92,15 @@ impl Process {
             .number_of_restart
             .cmp(&self.config.max_number_of_restart)
         {
-            O::Less => {
-                self.clean_child();
-                self.start()
-                    .map(|_| self.number_of_restart += 1)
-                    .inspect_err(|_| self.state = ProcessState::Fatal)?;
-            }
+            O::Less => match self.start() {
+                Ok(_) => self.number_of_restart += 1,
+                Err(e) => {
+                    self.number_of_restart += 1;
+                    return Err(e);
+                }
+            },
             O::Equal | O::Greater => {
                 self.state = ProcessState::Fatal;
-                self.clean_child();
             }
         };
 
@@ -104,15 +115,19 @@ impl Process {
         Ok(())
     }
 
-    pub(super) fn react_exited(&mut self) -> Result<(), ProcessError> {
-        use crate::config::AutoRestart as aR;
+    pub(super) fn react_expected_exit(&mut self) -> Result<(), ProcessError> {
+        use crate::config::AutoRestart as AR;
         match self.config.auto_restart {
-            aR::Always => {
-                self.start()?;
-            }
-            aR::Unexpected | aR::Never => {}
+            AR::Always => self.start(),
+            AR::Unexpected | AR::Never => Ok(()),
         }
+    }
 
-        Ok(())
+    pub(super) fn react_unexpected_exit(&mut self) -> Result<(), ProcessError> {
+        use crate::config::AutoRestart as AR;
+        match self.config.auto_restart {
+            AR::Always | AR::Unexpected => self.start(),
+            AR::Never => Ok(()),
+        }
     }
 }

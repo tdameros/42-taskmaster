@@ -1,15 +1,20 @@
+/* -------------------------------------------------------------------------- */
+/*                                   Import                                   */
+/* -------------------------------------------------------------------------- */
+
 use crate::config::ProgramConfig;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
-pub(super) mod manager;
-pub(super) mod process;
-pub(super) mod state;
+mod manager;
+mod process;
+mod state;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
+/// represent a process ;managed by taskmaster
 #[derive(Debug, Default)]
 pub(super) struct Process {
     /// the handle to the process
@@ -17,7 +22,7 @@ pub(super) struct Process {
 
     /// the time when the process was launched, used to determine the
     /// transition from starting to running
-    started_since: Option<std::time::SystemTime>, // to clarify
+    started_since: Option<std::time::SystemTime>,
 
     /// use to determine when to abort the child
     time_since_shutdown: Option<std::time::SystemTime>,
@@ -28,10 +33,8 @@ pub(super) struct Process {
     /// the config that the process is based on
     config: ProgramConfig,
 
-    /// indicate whether this program must be kept in adequation with
-    /// the config or shutdown and remove
-    must_be_removed: bool,
-
+    /// current number of restart, it increment only when the process was
+    /// restarted when it was consider to be in a starting state
     number_of_restart: u32,
 }
 
@@ -74,10 +77,11 @@ enum ProcessState {
 /// represent the error that can occur while performing action on the process class
 #[derive(Debug)]
 enum ProcessError {
-    /// an operation was perform on a child but no child were found (aka not launched yet)
+    /// an operation was perform on a child but no child were found (aka stopped or not launch yet)
     NoChild,
     ExitStatusNotFound(std::io::Error),
     CantKillProcess(std::io::Error),
+    /// ??
     Signal(std::io::Error),
     /// if no command was found to start the child
     NoCommand,

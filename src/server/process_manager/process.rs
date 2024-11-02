@@ -3,10 +3,7 @@
 /* -------------------------------------------------------------------------- */
 
 use super::{Process, ProcessError, ProcessState};
-use crate::{
-    config::{ProgramConfig, Signal},
-    logger::Logger,
-};
+use crate::config::{ProgramConfig, Signal};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::{
@@ -63,13 +60,28 @@ impl Process {
             .expect("Exit code should always be available on non-unix systems")
     }
 
-    /// return the child process_id if the child is running
+    /// Returns the child process ID if the process is active.
+    ///
+    /// # Returns
+    /// - `Some(u32)`: The process ID if the child is running, starting, or stopping.
+    /// - `None`: If the child process is inactive or if there was an error updating the state.
     pub(super) fn get_child_id(&mut self) -> Option<u32> {
-        let exit_code = self.get_exit_code();
-        self.child.as_ref().and_then(|child| match exit_code {
-            Ok(None) => Some(child.id()),
-            Ok(Some(_)) | Err(_) => None,
-        })
+        if self.update_state().is_err() {
+            return None;
+        }
+        use ProcessState as PS;
+        match self.state {
+            PS::Starting | PS::Running | PS::Stopping => {
+                Some(self.child.as_ref().expect("shouldn't not happened").id())
+            }
+            PS::NeverStartedYet
+            | PS::Stopped
+            | PS::Backoff
+            | PS::ExitedExpectedly
+            | PS::ExitedUnExpectedly
+            | PS::Fatal
+            | PS::Unknown => None,
+        }
     }
 
     /// Attempts to send a SIGKILL to the child process.
@@ -195,41 +207,60 @@ impl Process {
     }
 
     /// check the child state and change it's status if needed
+    ///
+    /// Returns:
+    /// - `Ok(())` if the exit_status could be acquire without issue.
+    /// - `Err(ProcessError::ExitStatusNotFound)` if the exit status could not be read.
     pub(super) fn update_state(&mut self) -> Result<(), ProcessError> {
+        use ProcessError as PE;
         use ProcessState as PS;
-        let result = self
-            .get_exit_code()
-            .inspect_err(|e| self.state = PS::Unknown)?;
-        match self.state {
-            PS::Starting => self.update_starting(result),
-            PS::Running => self.update_running(result),
-            PS::Stopping => self.update_stopping(result),
-            PS::Exited
-            | PS::Backoff
-            | PS::Stopped
-            | PS::Fatal
-            | PS::NeverStartedYet
-            | PS::Unknown => {
-                // no update exit status can trigger a change in state only manual or configured restart can
-            }
-        };
+        match self.get_exit_code() {
+            Ok(result) => {
+                match self.state {
+                    PS::Starting => self.update_starting(result),
+                    PS::Running => self.update_running(result),
+                    PS::Stopping => self.update_stopping(result),
+                    PS::Unknown => self.update_unknown(result),
+                    PS::Backoff
+                    | PS::Stopped
+                    | PS::Fatal
+                    | PS::NeverStartedYet
+                    | PS::ExitedExpectedly
+                    | PS::ExitedUnExpectedly => unreachable!(),
+                };
 
-        Ok(())
+                Ok(())
+            }
+            Err(e) => match e {
+                PE::NoChild => Ok(()),
+                PE::ExitStatusNotFound(ref _e) => {
+                    self.state = PS::Unknown;
+                    Err(e)
+                }
+                PE::NoCommand
+                | PE::CantKillProcess(_)
+                | PE::Signal(_)
+                | PE::CouldNotSpawnChild(_)
+                | PE::FailedToCreateRedirection(_) => unreachable!(),
+            },
+        }
     }
 
+    /// thi function use the config to see if some cleaning or restarting need to happened
     pub(super) fn react_to_program_state(&mut self) -> Result<(), ProcessError> {
-        self.update_state();
+        self.update_state()?;
         use ProcessState as PS;
         match self.state {
             PS::NeverStartedYet => self.react_never_started_yet(),
-            PS::Stopped => self.react_stopped(),
+            PS::Stopped => Ok(()),
             PS::Backoff => self.react_backoff(),
             PS::Stopping => self.react_stopping(),
-            PS::ExitedExpectedly => todo!(),
-            PS::ExitedUnExpectedly => todo!(),
-            PS::Fatal => todo!(),
-            PS::Unknown => todo!(),
-            PS::Starting | PS::Running => {}
+            PS::ExitedExpectedly => self.react_expected_exit(),
+            PS::ExitedUnExpectedly => self.react_unexpected_exit(),
+            PS::Fatal | PS::Starting | PS::Running => Ok(()),
+            PS::Unknown => unreachable!(
+                "as long as we return the error of update_state call before this match block"
+            ),
         }
     }
 
@@ -261,6 +292,7 @@ impl Process {
 
         self.child = Some(child);
         self.state = ProcessState::Starting;
+        self.started_since = Some(SystemTime::now());
 
         Ok(())
     }
