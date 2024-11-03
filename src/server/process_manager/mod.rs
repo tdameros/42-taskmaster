@@ -9,14 +9,17 @@ use crate::config::ProgramConfig;
 /* -------------------------------------------------------------------------- */
 mod manager;
 mod process;
+mod program;
 mod state;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
-/// represent a process ;managed by taskmaster
+
+/* --------------------------------- Process -------------------------------- */
+/// represent a process managed by taskmaster
 #[derive(Debug, Default)]
-pub(super) struct Process {
+struct Process {
     /// the handle to the process
     child: Option<std::process::Child>,
 
@@ -89,20 +92,26 @@ enum ProcessError {
     FailedToCreateRedirection(std::io::Error),
 }
 
+/* --------------------------------- Program -------------------------------- */
+/// represent a program
+#[derive(Debug, Default)]
+struct Program {
+    name: String,
+    config: ProgramConfig,
+    process_vec: Vec<Process>,
+}
+
+/* ----------------------------- ProgramManager ----------------------------- */
 /// this represent the running process
 #[derive(Debug)]
-pub(super) struct ProcessManager {
+pub(super) struct ProgramManager {
     /// represent the currently monitored programs
-    programs: std::collections::HashMap<String, Vec<Process>>,
+    programs: std::collections::HashMap<String, Program>,
 
     /// the place were programs go we they are no longer part of the config
     /// and we nee to wait for them to shutdown
-    purgatory: std::collections::HashMap<String, Vec<Process>>,
+    purgatory: std::collections::HashMap<String, Program>,
 }
 
 /// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
-pub(super) type SharedProcessManager = std::sync::Arc<std::sync::RwLock<ProcessManager>>;
-
-/// exist simply for an ease of implementation
-#[derive(Debug, Default)]
-struct ProgramToRestart(pub std::collections::HashMap<String, (i64, crate::config::ProgramConfig)>);
+pub(super) type SharedProcessManager = std::sync::Arc<std::sync::RwLock<ProgramManager>>;

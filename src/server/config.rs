@@ -22,11 +22,11 @@ const CONFIG_FILE_PATH: &str = "./config.yaml";
 pub(super) type SharedConfig = Arc<RwLock<Config>>;
 
 /// struct representing the process the server should monitor
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Config(#[serde(default)] HashMap<String, ProgramConfig>);
 
 /// represent all configuration of a monitored program
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
     #[serde(rename = "cmd", default)]
@@ -87,7 +87,7 @@ pub struct ProgramConfig {
 
 /// this enum represent whenever a program should be auto restart if it's termination
 /// has been detected
-#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub enum AutoRestart {
     #[serde(rename = "always")]
     Always,
@@ -103,7 +103,7 @@ pub enum AutoRestart {
 
 /// represent all the signal
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub enum Signal {
     SIGABRT,
     SIGALRM,

@@ -2,7 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use super::{Process, ProcessManager, ProcessState, ProgramToRestart};
+use super::{Process, ProcessState, Program, ProgramManager, ProgramToRestart};
 use crate::{
     config::{Config, ProgramConfig, SharedConfig},
     log_debug, log_error, log_info,
@@ -40,113 +40,53 @@ impl ProgramToRestart {
     }
 }
 
-impl ProcessManager {
+impl ProgramManager {
     /// return an instance of ProcessManager
     fn new(config: &Config) -> Self {
-        let mut result = HashMap::<String, Vec<Process>>::default();
+        let mut programs = HashMap::<String, Program>::default();
+        let purgatory = HashMap::<String, Program>::default();
 
         config.iter().for_each(|(program_name, program_config)| {
-            let mut process_vec = Vec::with_capacity(program_config.number_of_process);
-            for _ in 0..program_config.number_of_process {
-                process_vec.push(Process::new(program_config.to_owned()));
-            }
-            result.insert(
-                program_name.to_owned(),
-                Vec::with_capacity(program_config.number_of_process),
-            );
+            let program = Program::new(program_name.to_owned(), program_config.to_owned());
+            programs.insert(program_name.to_owned(), program);
         });
 
-        Self(result)
+        Self {
+            programs,
+            purgatory,
+        }
     }
 
-    fn monitor_once(&mut self) {
-        // update inner state
-        self.update_program_state();
+    fn monitor_once(&mut self, logger: &Logger) {
+        self.monitor_program_once(logger);
     }
 
-    /// this function will reacted to programs states according to there config
-    fn react_to_program_state(&mut self, config: &Config) {
-        let mut entry_to_remove = Vec::new();
-        self.0.iter_mut().for_each(|(program_name, process_vec)| {
-            match config.get(program_name) {
-                Some(_) => todo!(),
-                None => {
-                    // here we only check if the process_vec is empty if not we check if we should kill the still stopping process
-                    match process_vec.is_empty() {
-                        true => entry_to_remove.push(program_name),
-                        false => todo!(),
-                    }
-                }
-            }
+    /// this function iter over every process in programs and check update it's status
+    fn monitor_program_once(&mut self, logger: &Logger) {
+        self.programs.iter_mut().for_each(|(_name, program)| {
+            program.monitor(logger);
         });
-        entry_to_remove.iter().for_each(|entry| self.0.re);
     }
 
-    fn update_program_state(&mut self) {
-        self.0.iter_mut().for_each(|(_, process_vec)| {
-            process_vec.iter_mut().for_each(|process| {
-                process.update_state();
-            });
+    /// this function iter over every process in the purgatory and check update it's status
+    fn monitor_purgatory_once(&mut self, logger: &Logger) {
+        self.purgatory.iter_mut().for_each(|(_name, program)| {
+            program.monitor(logger);
         });
     }
 
     /// try to conform to the new config
     fn reload_config(&mut self, config: &Config) {
-        // we actualize the process state
-        self.update_program_state();
-        // we clear stopped process and shutdown others
-        self.clean_and_stop_process(config); // pass this all process are gone only stopped and stopping one remained
-                                             // they will eventually get removed by the monitor_once
+        self.drain_to_purgatory(config);
     }
 
-    /// this function clear the Stopped program that are no longer part of the config and shutdown the running one
-    fn clean_and_stop_process(&mut self, config: &Config) {
-        self.0
-            .iter_mut()
-            .filter(|&(program_name, _)| config.get(program_name).is_none())
-            .for_each(|(_, process_vec)| {
-                use ProcessState as PS;
-                process_vec.retain_mut(|process| match process.state {
-                    PS::Starting | PS::Running => {
-                        let signal = process.config.stop_signal.clone();
-                        let _ = process.send_signal(&signal).or_else(|_| process.kill()); // here NoChild is unreachable and if we can't stop the process we'll kill him.
-                        true
-                    }
-                    PS::Stopping => true,
-                    PS::Stopped
-                    | PS::NeverStartedYet
-                    | PS::Backoff
-                    | PS::Exited
-                    | PS::Fatal
-                    | PS::Unknown => false,
-                });
-                process_vec.retain_mut(|process| match process.state {
-                    PS::Stopping => true,
-                    PS::Stopped => false,
-
-                    PS::NeverStartedYet
-                    | PS::Backoff
-                    | PS::Exited
-                    | PS::Fatal
-                    | PS::Unknown
-                    | PS::Running
-                    | PS::Starting => unreachable!(),
-                });
-            });
-        self.0
-            .retain(|_, process_vec| match process_vec.is_empty() {
-                true => false,
-                false => {}
-            });
-    }
-
-    /// shutdown the process that are no longer part of the config
-    fn shutdown_excess(&mut self, config: &Config) {
-        self.0.iter_mut().for_each(|(program_name, process_vec)| {
-            if config.get(program_name).is_none() {
-                process_vec.iter_mut().for_each(|process| {});
-            }
-        });
+    fn drain_to_purgatory(&mut self, config: &Config) {
+        self.purgatory.extend(
+            self.programs
+                .drain()
+                .filter(|(_name, program)| !program.should_be_kept(config))
+                .collect::<HashMap<String, Program>>(),
+        );
     }
 
     /// this function spawn all the replica of a given program given a reference to a programs config
@@ -421,31 +361,8 @@ impl DerefMut for ProgramToRestart {
     }
 }
 
-impl From<ProcessManager> for SharedProcessManager {
-    fn from(value: ProcessManager) -> Self {
+impl From<ProgramManager> for SharedProcessManager {
+    fn from(value: ProgramManager) -> Self {
         Arc::new(RwLock::new(value))
-    }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                    Error                                   */
-/* -------------------------------------------------------------------------- */
-#[derive(Debug)]
-pub(super) enum KillingChildError {
-    NoProgramFound,
-    CantKillProcess,
-}
-
-impl Error for KillingChildError {}
-
-impl Display for KillingChildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl From<std::io::Error> for KillingChildError {
-    fn from(_: std::io::Error) -> Self {
-        KillingChildError::CantKillProcess
     }
 }
