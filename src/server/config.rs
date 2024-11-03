@@ -5,6 +5,7 @@
 use serde::de::{self, Unexpected};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
 use tcl::error::TaskmasterError;
@@ -85,6 +86,17 @@ pub struct ProgramConfig {
     /// An umask to set before launching the program
     #[serde(rename = "umask", default, deserialize_with = "parse_umask")]
     pub(super) umask: Option<libc::mode_t>,
+
+    /// Execute the process with a specific user (root required)
+    #[serde(rename = "user", default, deserialize_with = "parse_user")]
+    pub(super) de_escalation_user: Option<User>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct User {
+    pub username: String,
+    pub uid: libc::uid_t,
+    pub gid: libc::gid_t,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
