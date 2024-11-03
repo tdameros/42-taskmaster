@@ -77,13 +77,13 @@ pub struct ProgramConfig {
     /// Environment variables to set before launching the program
     #[serde(rename = "env")]
     pub(super) environmental_variable_to_set: Option<HashMap<String, String>>,
-    // environmental_variable_to_set: Vec<(String, String)>,
+
     /// A working directory to set before launching the program
     #[serde(rename = "workingdir")]
     pub(super) working_directory: Option<String>,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", deserialize_with = "parse_umask")]
+    #[serde(rename = "umask", default, deserialize_with = "parse_umask")]
     pub(super) umask: Option<libc::mode_t>,
 }
 
@@ -176,6 +176,45 @@ where
     } else {
         Ok(None)
     }
+}
+
+fn parse_user<'de, D>(deserializer: D) -> Result<Option<User>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let user_deserialize = Option::<String>::deserialize(deserializer)?;
+    match user_deserialize {
+        Some(user_str) => {
+            if let Some(user) = get_all_users()
+                .iter()
+                .find(|u| u.username == user_str)
+                .cloned()
+            {
+                Ok(Some(user))
+            } else {
+                Err(de::Error::custom("invalid user"))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+fn get_all_users() -> Vec<User> {
+    let mut users: Vec<User> = Vec::new();
+    unsafe {
+        libc::setpwent();
+        while let Some(user) = libc::getpwent().as_mut() {
+            let username = CStr::from_ptr(user.pw_name);
+            if let Ok(username) = username.to_str() {
+                users.push(User {
+                    username: username.to_owned(),
+                    uid: user.pw_uid,
+                    gid: user.pw_gid,
+                })
+            }
+        }
+    }
+    users
 }
 
 impl ProgramConfig {
