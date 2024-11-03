@@ -42,7 +42,7 @@ struct Process {
 }
 
 /// Represent the state of a given process
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 enum ProcessState {
     /// the default state, has never been started.
     #[default]
@@ -99,6 +99,16 @@ struct Program {
     name: String,
     config: ProgramConfig,
     process_vec: Vec<Process>,
+}
+
+#[derive(Debug)]
+enum ProgramError {
+    /// represent an error in the execution of a process task
+    Process(ProcessError),
+    /// represent a logic error, like performing the start command on a program
+    /// whose process where already running
+    /// this is just informative and don't change anything on the behavior of the program
+    Logic(String),
 }
 
 /* ----------------------------- ProgramManager ----------------------------- */

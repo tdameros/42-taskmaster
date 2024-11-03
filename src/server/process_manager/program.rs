@@ -2,7 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::path::Iter;
+use std::{error::Error, fmt::Display};
 
 use crate::{
     config::{Config, ProgramConfig},
@@ -10,7 +10,7 @@ use crate::{
     logger::Logger,
 };
 
-use super::{Process, Program};
+use super::{Process, ProcessError, ProcessState, Program, ProgramError};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -73,5 +73,42 @@ impl Program {
 
     pub(super) fn is_clean(&self) -> bool {
         self.process_vec.is_empty()
+    }
+
+    /// start all the process of this program
+    /// # Returns
+    /// - `Ok(())` if every process could be spawn correctly
+    /// - `Err(Process)` if something went wrong during the spawning of a process
+    /// - `Err(Logic)` if at least one process were found to not be in the NeverStartedYet state
+    pub(super) fn start(&mut self) -> Result<(), ProgramError> {
+        for process in self.process_vec.iter_mut() {
+            if process.state == ProcessState::NeverStartedYet {
+                process.start()?;
+            } else {
+                return Err(ProgramError::Logic(
+                    "One ore more process where found to not have the correct state to be started"
+                        .to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Error Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl Error for ProgramError {}
+
+impl Display for ProgramError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl From<ProcessError> for ProgramError {
+    fn from(value: ProcessError) -> Self {
+        ProgramError::Process(value)
     }
 }
