@@ -129,7 +129,8 @@ impl ProcessManager {
             }
 
             // adding stdout and stderr redirection
-            Self::set_command_redirection(&mut tmp_child, program_config)?;
+            Self::set_command_redirection(&mut tmp_child, program_config)
+                .map_err(|e| TaskmasterError::Custom(format!("Redirection Error: {}", e)))?;
 
             // adding environment variables
             if let Some(env_variables) = &program_config.environmental_variable_to_set {
@@ -189,7 +190,10 @@ impl ProcessManager {
     ) -> Result<(), TaskmasterError> {
         match &program_config.stdout_redirection {
             Some(stdout) => {
-                let file = fs::OpenOptions::new().append(true).open(stdout)?;
+                let file = fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(stdout)?;
                 command.stdout(file);
             }
             None => {
@@ -198,7 +202,10 @@ impl ProcessManager {
         }
         match &program_config.stderr_redirection {
             Some(stderr) => {
-                let file = fs::OpenOptions::new().append(true).open(stderr)?;
+                let file = fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(stderr)?;
                 command.stderr(file);
             }
             None => {
