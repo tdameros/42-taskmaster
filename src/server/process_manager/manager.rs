@@ -73,20 +73,39 @@ impl ProgramManager {
         self.purgatory.iter_mut().for_each(|(_name, program)| {
             program.monitor(logger);
         });
+        self.clean_purgatory();
     }
 
     /// try to conform to the new config
-    fn reload_config(&mut self, config: &Config) {
+    fn reload_config(&mut self, config: &Config, logger: &Logger) {
+        // remove unwanted program from the list of program
         self.drain_to_purgatory(config);
+        // shut them down
+        self.shutdown_purgatory(logger);
     }
 
     fn drain_to_purgatory(&mut self, config: &Config) {
         self.purgatory.extend(
             self.programs
                 .drain()
-                .filter(|(_name, program)| !program.should_be_kept(config))
-                .collect::<HashMap<String, Program>>(),
+                .filter(|(_name, program)| !program.should_be_kept(config)),
         );
+    }
+
+    /// perform a shutdown of all the program inside the purgatory
+    /// this may not be effective immediately as some program may need time to properly shutdown
+    fn shutdown_purgatory(&mut self, logger: &Logger) {
+        self.purgatory.iter_mut().for_each(|(_name, program)| {
+            program.shutdown_all_process(logger);
+        });
+    }
+
+    /// try to remove as many program as possible from the purgatory leaving only the still running program
+    fn clean_purgatory(&mut self) {
+        self.purgatory.iter_mut().for_each(|(_name, program)| {
+            program.clean_inactive_process();
+        });
+        self.purgatory.retain(|_name, program| !program.is_clean());
     }
 
     /// this function spawn all the replica of a given program given a reference to a programs config
