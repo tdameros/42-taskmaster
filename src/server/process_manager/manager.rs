@@ -122,7 +122,11 @@ impl ProgramManager {
             Response::Error("couldn't found a program named : {program_name}".to_string()),
             |program| match program.start() {
                 Ok(_) => Response::Success("Starting task succeed".to_string()),
-                Err(_) => {
+                Err(e) => {
+                    match e {
+                        super::ProgramError::PartialSuccess(vec) => todo!(),
+                        super::ProgramError::TotalFailure(vec) => todo!(),
+                    }
                     Response::Error("Something went wrong while spawning process".to_string())
                 }
             },

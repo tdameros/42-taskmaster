@@ -10,7 +10,7 @@ use crate::{
     logger::Logger,
 };
 
-use super::{Process, ProcessError, ProcessState, Program, ProgramError};
+use super::{OrderError, Process, ProcessError, ProcessState, Program, ProgramError};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -75,24 +75,92 @@ impl Program {
         self.process_vec.is_empty()
     }
 
-    /// start all the process of this program
+    /// Attempts to start all processes of this program.
+    ///
     /// # Returns
-    /// - `Ok(())` if every process could be spawn correctly
-    /// - `Err(Process)` if something went wrong during the spawning of a process
-    /// - `Err(Logic)` if at least one process were found to not be in the NeverStartedYet state
-    pub(super) fn start(&mut self) -> Result<(), ProgramError> {
-        for process in self.process_vec.iter_mut() {
-            if process.state == ProcessState::NeverStartedYet {
-                process.start()?;
-            } else {
-                return Err(ProgramError::Logic(
-                    "One ore more process where found to not have the correct state to be started"
-                        .to_string(),
-                ));
-            }
-        }
+    /// - `Ok(())` if all processes were started successfully or were already active.
+    /// - `Err(OrderError::PartialSuccess(errors))` if at least one process was started successfully,
+    ///   but some errors occurred (includes both logic and process errors).
+    /// - `Err(OrderError::TotalFailure(errors))` if all attempts to start processes failed due to
+    ///   process errors (no successes and no active processes).
+    pub(super) fn start(&mut self) -> Result<(), OrderError> {
+        let results: Vec<Result<(), ProgramError>> = self
+            .process_vec
+            .iter_mut()
+            .map(|process| {
+                if process.is_active() {
+                    Err(ProgramError::Logic("Process is already active".to_string()))
+                } else {
+                    process.start().map_err(ProgramError::Process)
+                }
+            })
+            .collect();
 
-        Ok(())
+        determine_order_result(results)
+    }
+
+    /// Attempts to stop all processes of this program.
+    ///
+    /// # Returns
+    /// - `Ok(())` if all processes were stopped successfully or were already inactive.
+    /// - `Err(OrderError::PartialSuccess(errors))` if at least one process was stopped successfully,
+    ///   but some errors occurred (includes both logic and process errors).
+    /// - `Err(OrderError::TotalFailure(errors))` if all attempts to stop processes failed due to
+    ///   process errors (no successes and no inactive processes).
+    pub(super) fn stop(&mut self) -> Result<(), OrderError> {
+        let results: Vec<Result<(), ProgramError>> = self
+            .process_vec
+            .iter_mut()
+            .map(|process| {
+                if !process.is_active() {
+                    Err(ProgramError::Logic(
+                        "Process is already inactive".to_string(),
+                    ))
+                } else {
+                    process
+                        .send_signal(&self.config.stop_signal)
+                        .or_else(|_| process.kill())
+                        .map_err(ProgramError::Process)
+                }
+            })
+            .collect();
+
+        determine_order_result(results)
+    }
+}
+
+/// Determines the overall result of a bulk operation on processes (start, stop, or restart).
+///
+/// # Parameters
+/// - `results`: A vector of individual process operation results.
+///
+/// # Returns
+/// - `Ok(())` if all operations were successful.
+/// - `Err(OrderError::PartialSuccess(errors))` if there were any logic errors or at least one success.
+/// - `Err(OrderError::TotalFailure(errors))` if all errors were process errors and no successes.
+fn determine_order_result(results: Vec<Result<(), ProgramError>>) -> Result<(), OrderError> {
+    let (successes, errors): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+
+    if errors.is_empty() {
+        // the case were there was no error at all
+        return Ok(());
+    }
+
+    let (logic_errors, process_errors): (Vec<_>, Vec<_>) = errors
+        .into_iter()
+        .map(Result::unwrap_err)
+        .partition(|error| matches!(error, ProgramError::Logic(_)));
+
+    if logic_errors.is_empty() && successes.is_empty() {
+        // if no success and no skip(AKA logic error)
+        Err(OrderError::TotalFailure(process_errors))
+    } else {
+        Err(OrderError::PartialSuccess(
+            logic_errors
+                .into_iter()
+                .chain(process_errors.into_iter())
+                .collect(),
+        ))
     }
 }
 

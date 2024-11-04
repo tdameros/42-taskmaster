@@ -332,6 +332,17 @@ impl Process {
     pub(super) fn clean_child(&mut self) {
         self.child = None;
     }
+
+    /// return true if the process still have an active child that mean if his state is either:
+    /// - `Starting`
+    /// - `Running`
+    /// - `Stopping`
+    /// - `Unknown`
+    ///
+    /// return false otherwise
+    pub(super) fn is_active(&self) -> bool {
+        self.child.is_some()
+    }
 }
 
 /* -------------------------------------------------------------------------- */

@@ -103,12 +103,18 @@ struct Program {
 
 #[derive(Debug)]
 enum ProgramError {
-    /// represent an error in the execution of a process task
-    Process(ProcessError),
-    /// represent a logic error, like performing the start command on a program
-    /// whose process where already running
-    /// this is just informative and don't change anything on the behavior of the program
     Logic(String),
+    Process(ProcessError),
+}
+
+#[derive(Debug)]
+enum OrderError {
+    /// represent a partial success of an order given to a program it contain the
+    /// list of error that happened and garanties that at least one successful operation occurred
+    PartialSuccess(Vec<ProgramError>),
+
+    /// represent a total failure of the order that was given, no operation performed on the child where successful
+    TotalFailure(Vec<ProgramError>),
 }
 
 /* ----------------------------- ProgramManager ----------------------------- */
