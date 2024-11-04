@@ -4,9 +4,10 @@
 
 use tcl::message::Response;
 
-use super::{Program, ProgramManager};
+use super::{Program, ProgramError, ProgramManager};
 use crate::{
     config::{Config, SharedConfig},
+    log_error,
     logger::{Logger, SharedLogger},
 };
 use std::{
@@ -116,20 +117,104 @@ impl ProgramManager {
         })
     }
 
-    /// Use for user manual starting of a program
-    pub(super) fn start_program(&mut self, program_name: &str) -> Response {
+    /// Use for user manual starting of a program's process
+    pub(super) fn start_program(&mut self, program_name: &str, logger: &Logger) -> Response {
         self.programs.get_mut(program_name).map_or(
             Response::Error("couldn't found a program named : {program_name}".to_string()),
             |program| match program.start() {
                 Ok(_) => Response::Success("Starting task succeed".to_string()),
-                Err(e) => {
-                    match e {
-                        super::ProgramError::PartialSuccess(vec) => todo!(),
-                        super::ProgramError::TotalFailure(vec) => todo!(),
+                Err(e) => match e {
+                    super::OrderError::PartialSuccess(errors) => {
+                        let error_message = format!(
+                            "Partial success starting program '{}'. Errors: {}",
+                            program_name,
+                            format_errors(&errors)
+                        );
+                        log_error!(logger, "{error_message}");
+                        Response::Error(error_message)
                     }
-                    Response::Error("Something went wrong while spawning process".to_string())
-                }
+                    super::OrderError::TotalFailure(errors) => {
+                        let error_message = format!(
+                            "Failed to start program '{}'. Errors: {}",
+                            program_name,
+                            format_errors(&errors)
+                        );
+                        log_error!(logger, "{error_message}");
+                        Response::Error(error_message)
+                    }
+                },
             },
         )
     }
+
+    /// use for user manual shutdown of a program's process
+    pub(super) fn stop_program(&mut self, program_name: &str, logger: &Logger) -> Response {
+        self.programs.get_mut(program_name).map_or(
+            Response::Error("couldn't found a program named : {program_name}".to_string()),
+            |program| match program.stop() {
+                Ok(_) => Response::Success("stopping task succeed".to_string()),
+                Err(e) => match e {
+                    super::OrderError::PartialSuccess(errors) => {
+                        let error_message = format!(
+                            "Partial success stopping program '{}'. Errors: {}",
+                            program_name,
+                            format_errors(&errors)
+                        );
+                        log_error!(logger, "{error_message}");
+                        Response::Error(error_message)
+                    }
+                    super::OrderError::TotalFailure(errors) => {
+                        let error_message = format!(
+                            "Failed to stop program '{}'. Errors: {}",
+                            program_name,
+                            format_errors(&errors)
+                        );
+                        log_error!(logger, "{error_message}");
+                        Response::Error(error_message)
+                    }
+                },
+            },
+        )
+    }
+
+    /// use for user manual restart of a program's process
+    pub(super) fn restart_program(&mut self, program_name: &str, logger: &Logger) -> Response {
+        self.programs.get_mut(program_name).map_or(
+            Response::Error("couldn't found a program named : {program_name}".to_string()),
+            |program| match program.restart(logger) {
+                Ok(_) => Response::Success("stopping task succeed".to_string()),
+                Err(e) => match e {
+                    super::OrderError::PartialSuccess(errors) => {
+                        let error_message = format!(
+                            "Partial success stopping program '{}'. Errors: {}",
+                            program_name,
+                            format_errors(&errors)
+                        );
+                        log_error!(logger, "{error_message}");
+                        Response::Error(error_message)
+                    }
+                    super::OrderError::TotalFailure(errors) => {
+                        let error_message = format!(
+                            "Failed to stop program '{}'. Errors: {}",
+                            program_name,
+                            format_errors(&errors)
+                        );
+                        log_error!(logger, "{error_message}");
+                        Response::Error(error_message)
+                    }
+                },
+            },
+        )
+    }
+}
+
+fn format_errors(errors: &[ProgramError]) -> String {
+    errors
+        .iter()
+        .map(|e| match e {
+            ProgramError::Logic(msg) => format!("Logic error: {}", msg),
+            ProgramError::Process(err) => format!("Process error: {:?}", err),
+        })
+        .collect::<Vec<String>>()
+        .join(", ")
 }

@@ -2,7 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, thread::sleep, time::Duration};
 
 use crate::{
     config::{Config, ProgramConfig},
@@ -10,7 +10,7 @@ use crate::{
     logger::Logger,
 };
 
-use super::{OrderError, Process, ProcessError, ProcessState, Program, ProgramError};
+use super::{OrderError, Process, ProcessError, Program, ProgramError};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -126,6 +126,66 @@ impl Program {
             .collect();
 
         determine_order_result(results)
+    }
+
+    /// Restarts the program by stopping all processes, waiting briefly, monitoring, and then starting processes.
+    ///
+    /// # Returns
+    /// - `Ok(())` if all processes were successfully restarted.
+    /// - `Err(OrderError::PartialSuccess(errors))` if some processes were restarted successfully, but errors occurred.
+    /// - `Err(OrderError::TotalFailure(errors))` if all restart attempts failed.
+    ///
+    /// # Note
+    /// This function includes a 1-second delay between stop and start operations.
+    pub(super) fn restart(&mut self, logger: &Logger) -> Result<(), OrderError> {
+        let stop_results = self.stop();
+        sleep(Duration::from_secs(1));
+        self.monitor(logger);
+        let start_results = self.start();
+
+        squish_order_result(stop_results, start_results)
+    }
+}
+
+/// Combines the results of stopping and starting operations on processes.
+///
+/// # Parameters
+/// - `stop_results`: The result of the stop operation.
+/// - `start_results`: The result of the start operation.
+///
+/// # Returns
+/// - `Ok(())` if both operations succeeded.
+/// - `Err(OrderError::PartialSuccess(errors))` if at least one operation was partially successful or had errors.
+/// - `Err(OrderError::TotalFailure(errors))` if both operations failed completely with no successes.
+fn squish_order_result(
+    stop_results: Result<(), OrderError>,
+    start_results: Result<(), OrderError>,
+) -> Result<(), OrderError> {
+    match (stop_results, start_results) {
+        (Ok(()), Ok(())) => Ok(()),
+        (res1, res2) => {
+            let mut all_errors = Vec::new();
+            let mut all_total_failure = true;
+
+            for res in [res1, res2].into_iter() {
+                match res {
+                    Ok(()) => all_total_failure = false,
+                    Err(OrderError::PartialSuccess(errors)) => {
+                        all_total_failure = false;
+                        all_errors.extend(errors);
+                    }
+                    Err(OrderError::TotalFailure(errors)) => {
+                        all_errors.extend(errors);
+                    }
+                }
+            }
+
+            if all_total_failure {
+                Err(OrderError::TotalFailure(all_errors))
+            } else {
+                Err(OrderError::PartialSuccess(all_errors))
+            }
+        }
     }
 }
 
