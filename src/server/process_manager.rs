@@ -8,6 +8,7 @@ use crate::{
     logger::{Logger, SharedLogger},
     running_process::RunningProcess,
 };
+use std::os::unix::process::CommandExt;
 use std::process::Stdio;
 use std::{
     collections::HashMap,
@@ -135,6 +136,12 @@ impl ProcessManager {
             // adding environment variables
             if let Some(env_variables) = &program_config.environmental_variable_to_set {
                 tmp_child.envs(env_variables);
+            }
+
+            // privilege de-escalation
+            if let Some(user) = &program_config.de_escalation_user {
+                tmp_child.uid(user.uid);
+                tmp_child.gid(user.gid);
             }
 
             // adding arguments if there are any in the command section of program config
