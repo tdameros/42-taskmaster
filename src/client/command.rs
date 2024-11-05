@@ -1,15 +1,14 @@
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
-use std::collections::HashMap;
 use std::ops::Deref;
-use std::time::{Duration, SystemTime};
-use tcl::message::{receive, ProcessState, ProcessStatus, Response};
+use tcl::message::{receive, Response};
 use tcl::{
     error::TaskmasterError,
     message::{send, Request},
 };
 use tokio::net::TcpStream;
+
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
@@ -36,11 +35,7 @@ impl Command {
                 Command::forward_to_server(request, stream).await?;
                 let response: Result<Response, TaskmasterError> = receive(stream).await;
                 match response {
-                    Ok(result) => match result {
-                        Response::Success(msg) => println!("{msg}"),
-                        Response::Error(msg) => println!("ERROR: {msg}"),
-                        Response::Status(processes) => Self::display_status(&processes),
-                    },
+                    Ok(result) => print!("{result}"),
                     Err(error) => {
                         println!("{error}");
                     }
@@ -79,90 +74,6 @@ impl Command {
     ) -> Result<(), TaskmasterError> {
         send(stream, request).await?;
         Ok(())
-    }
-
-    fn display_status(programs: &HashMap<String, Vec<ProcessState>>) {
-        let mut keys: Vec<String> = programs.keys().cloned().collect();
-        keys.sort();
-        for name in keys.iter() {
-            if let Some(processes) = programs.get(name) {
-                for process in processes {
-                    match process.status.clone() {
-                        ProcessStatus::Stopped => Self::display_stopped_process(name, process),
-                        ProcessStatus::Stopping => Self::display_alive_process(name, process),
-                        ProcessStatus::Running => Self::display_alive_process(name, process),
-                        ProcessStatus::Starting => Self::display_alive_process(name, process),
-                        ProcessStatus::Fatal(error) => {
-                            Self::display_fatal_process(name, process, &error)
-                        }
-                    }
-                }
-                if processes.is_empty() {
-                    Self::display_never_started_process(name);
-                }
-            }
-        }
-    }
-
-    fn display_stopped_process(name: &String, process: &ProcessState) {
-        if let Some(shutdown_time) = process.shutdown_time {
-            if let Ok(downtime) = SystemTime::now().duration_since(shutdown_time) {
-                println!(
-                    "{:<15} {:<10} since {}",
-                    name,
-                    format!("{:?}", process.status),
-                    Self::format_duration(downtime)
-                );
-            } else {
-                println!("{:<15} {:<10}", name, format!("{:?}", process.status),);
-            }
-        } else {
-            println!("{:<15} {:<10}", name, format!("{:?}", process.status),);
-        }
-    }
-
-    fn display_alive_process(name: &String, process: &ProcessState) {
-        if let Ok(uptime) = SystemTime::now().duration_since(process.start_time) {
-            println!(
-                "{:<15} {:<10} pid {:<5}, uptime {}",
-                name,
-                format!("{:?}", process.status),
-                process.pid,
-                Self::format_duration(uptime)
-            );
-        } else {
-            println!(
-                "{:<15} {:<10} pid {:<5}",
-                name,
-                format!("{:?}", process.status),
-                process.pid,
-            );
-        }
-    }
-
-    fn display_never_started_process(name: &String) {
-        println!(
-            "{:<15} {:<10}",
-            name,
-            format!("{:?}", ProcessStatus::Stopped),
-        );
-    }
-
-    fn display_fatal_process(name: &String, process: &ProcessState, error: &String) {
-        println!(
-            "{:<15} {:<10} ({})",
-            name,
-            format!("{:?}", process.status),
-            error
-        );
-    }
-
-    fn format_duration(duration: Duration) -> String {
-        let secs = duration.as_secs();
-        let hours = secs / 3600;
-        let minutes = (secs % 3600) / 60;
-        let seconds = secs % 60;
-        format!("{}:{:02}:{:02}", hours, minutes, seconds)
     }
 }
 

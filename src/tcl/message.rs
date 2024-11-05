@@ -11,7 +11,10 @@
 /* -------------------------------------------------------------------------- */
 use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, time::SystemTime};
+use std::{
+    fmt::Display,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -139,8 +142,72 @@ pub async fn receive<T: for<'a> Deserialize<'a>>(
 /* -------------------------------------------------------------------------- */
 /*                           Display Implementation                           */
 /* -------------------------------------------------------------------------- */
+fn format_duration(duration: Duration) -> String {
+    let secs = duration.as_secs();
+    let hours = secs / 3600;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+    format!("{}:{:02}:{:02}", hours, minutes, seconds)
+}
+
+impl Display for ProcessState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:#?}")
+    }
+}
+
+impl Display for ProcessStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "state: {}", self.status)?;
+        match self.pid {
+            Some(pid) => writeln!(f, "Pid: {}", pid)?,
+            None => writeln!(f, "This process has no Pid")?,
+        }
+        match self.start_time {
+            Some(start_time) => writeln!(
+                f,
+                "started: {:#?}",
+                format_duration(start_time.duration_since(UNIX_EPOCH).unwrap())
+            )?,
+            None => writeln!(f, "Process not active yet")?,
+        }
+        match self.shutdown_time {
+            Some(shutdown_time) => writeln!(
+                f,
+                "stopping since: {:#?}",
+                format_duration(shutdown_time.duration_since(UNIX_EPOCH).unwrap())
+            )?,
+            None => writeln!(f, "Process not shutting down yet")?,
+        }
+        write!(f, "number of restart: {}", self.number_of_restart)?;
+        Ok(())
+    }
+}
+
 impl Display for ProgramStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        writeln!(f, "{}: ", self.name)?;
+        for process in self.status.iter() {
+            writeln!(f, "---------------")?;
+            writeln!(f, "{process}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Response::Success(_) => writeln!(f, "Success"),
+            Response::Error(e) => writeln!(f, "Error: {e}"),
+            Response::Status(vec) => {
+                writeln!(f, "Programs Status:")?;
+                writeln!(f, "")?;
+                for program_status in vec.iter() {
+                    writeln!(f, "{program_status}\n")?;
+                }
+                Ok(())
+            }
+        }
     }
 }

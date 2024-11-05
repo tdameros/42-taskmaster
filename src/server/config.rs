@@ -26,6 +26,7 @@ pub struct Config(#[serde(default)] HashMap<String, ProgramConfig>);
 
 /// represent all configuration of a monitored program
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
+#[serde(default)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
     #[serde(rename = "cmd", default)]

@@ -7,7 +7,6 @@ use crate::config::{ProgramConfig, Signal};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::{
-    borrow::BorrowMut,
     fmt::Display,
     fs,
     process::{Command, ExitStatus, Stdio},
@@ -158,6 +157,7 @@ impl Process {
         }
 
         self.time_since_shutdown = Some(SystemTime::now());
+        self.started_since = None;
         self.state = ProcessState::Stopping;
         Ok(())
     }
@@ -309,7 +309,10 @@ impl Process {
     fn set_command_redirection(&self, command: &mut Command) -> Result<(), std::io::Error> {
         match self.config.stdout_redirection.as_ref() {
             Some(stdout) => {
-                let file = fs::OpenOptions::new().append(true).open(stdout)?;
+                let file = fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(stdout)?;
                 command.stdout(file);
             }
             None => {
@@ -318,7 +321,10 @@ impl Process {
         }
         match self.config.stderr_redirection.as_ref() {
             Some(stderr) => {
-                let file = fs::OpenOptions::new().append(true).open(stderr)?;
+                let file = fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(stderr)?;
                 command.stderr(file);
             }
             None => {
