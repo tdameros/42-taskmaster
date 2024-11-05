@@ -47,7 +47,7 @@ async fn process_user_input(user_input: String, stream: &mut TcpStream) {
         return;
     }
 
-    match Command::from_client_input(trimmed_user_input.as_str()) {
+    match Command::try_from(trimmed_user_input.as_str()) {
         Ok(command) => {
             if let Err(error) = command.execute(stream).await {
                 eprintln!("Error while executing command: {error}");

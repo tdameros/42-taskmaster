@@ -11,8 +11,7 @@
 /* -------------------------------------------------------------------------- */
 use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::time::SystemTime;
+use std::{fmt::Display, time::SystemTime};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -26,7 +25,7 @@ use tokio::{
 pub enum Response {
     Success(String),
     Error(String),
-    Status(HashMap<String, Vec<ProcessState>>),
+    Status(Vec<ProgramStatus>),
 }
 
 /// Represent what can be send to the server as request
@@ -39,21 +38,53 @@ pub enum Request {
     Reload,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum ProcessStatus {
-    Stopped,
-    Stopping,
-    Starting,
-    Running,
-    Fatal(String),
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProgramStatus {
+    pub name: String,
+    pub status: Vec<ProcessStatus>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProcessState {
-    pub status: ProcessStatus,
-    pub pid: u32,
-    pub start_time: SystemTime,
+pub struct ProcessStatus {
+    pub status: ProcessState,
+    pub pid: Option<u32>,
+    pub start_time: Option<SystemTime>,
     pub shutdown_time: Option<SystemTime>,
+    pub number_of_restart: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ProcessState {
+    /// the default state, has never been started.
+    NeverStartedYet,
+
+    /// The process has been stopped due to a stop request
+    Stopped,
+
+    /// The process is starting due to a start request.
+    Starting,
+
+    /// The process is running.
+    Running,
+
+    /// The process entered the Starting state but subsequently exited too quickly
+    /// (before the time defined in time_to_start) to move to the Running state.
+    Backoff,
+
+    /// The process is stopping due to a stop request.
+    Stopping,
+
+    /// The process exited from the RUNNING state expectedly.
+    ExitedExpectedly,
+
+    /// The process exited from the RUNNING state unexpectedly.
+    ExitedUnExpectedly,
+
+    /// The process could not be started successfully.
+    Fatal,
+
+    /// The process is in an unknown state (error while getting the exit status).
+    Unknown,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -103,4 +134,13 @@ pub async fn receive<T: for<'a> Deserialize<'a>>(
 
     // return the message if everything went right
     Ok(received_message)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                           Display Implementation                           */
+/* -------------------------------------------------------------------------- */
+impl Display for ProgramStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }

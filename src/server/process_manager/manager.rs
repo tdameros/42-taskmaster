@@ -4,9 +4,9 @@
 
 use tcl::message::Response;
 
-use super::{Program, ProgramError, ProgramManager};
+use super::{OrderError, Program, ProgramError, ProgramManager, SharedProcessManager};
 use crate::{
-    config::{Config, SharedConfig},
+    config::Config,
     log_error,
     logger::{Logger, SharedLogger},
 };
@@ -39,6 +39,7 @@ impl ProgramManager {
 
     fn monitor_once(&mut self, logger: &Logger) {
         self.monitor_program_once(logger);
+        self.monitor_purgatory_once(logger);
     }
 
     /// this function iter over every process in programs and check update it's status
@@ -57,7 +58,7 @@ impl ProgramManager {
     }
 
     /// try to conform to the new config
-    fn reload_config(&mut self, config: &Config, logger: &Logger) {
+    pub fn reload_config(&mut self, config: &Config, logger: &Logger) {
         // remove unwanted program from the list of program
         self.drain_to_purgatory(config);
         // shut them down
@@ -103,22 +104,22 @@ impl ProgramManager {
     }
 
     /// this function spawn a thread the will monitor all process in self updating there status as needed, refreshing every refresh_period
-    pub(super) async fn monitor(
-        &mut self,
+    pub async fn monitor(
         shared_process_manager: SharedProcessManager,
-        shared_config: SharedConfig,
         shared_logger: SharedLogger,
         refresh_period: Duration,
     ) -> Result<JoinHandle<()>, std::io::Error> {
-        let shared = Arc::new(RwLock::new(self));
         thread::Builder::new().spawn(move || loop {
-            self.monitor_once();
+            shared_process_manager
+                .write()
+                .unwrap()
+                .monitor_once(&shared_logger);
             thread::sleep(refresh_period);
         })
     }
 
     /// Use for user manual starting of a program's process
-    pub(super) fn start_program(&mut self, program_name: &str, logger: &Logger) -> Response {
+    pub fn start_program(&mut self, program_name: &str, logger: &Logger) -> Response {
         self.programs.get_mut(program_name).map_or(
             Response::Error("couldn't found a program named : {program_name}".to_string()),
             |program| match program.start() {
@@ -148,7 +149,7 @@ impl ProgramManager {
     }
 
     /// use for user manual shutdown of a program's process
-    pub(super) fn stop_program(&mut self, program_name: &str, logger: &Logger) -> Response {
+    pub fn stop_program(&mut self, program_name: &str, logger: &Logger) -> Response {
         self.programs.get_mut(program_name).map_or(
             Response::Error("couldn't found a program named : {program_name}".to_string()),
             |program| match program.stop() {
@@ -178,7 +179,7 @@ impl ProgramManager {
     }
 
     /// use for user manual restart of a program's process
-    pub(super) fn restart_program(&mut self, program_name: &str, logger: &Logger) -> Response {
+    pub fn restart_program(&mut self, program_name: &str, logger: &Logger) -> Response {
         self.programs.get_mut(program_name).map_or(
             Response::Error("couldn't found a program named : {program_name}".to_string()),
             |program| match program.restart(logger) {
@@ -206,6 +207,11 @@ impl ProgramManager {
             },
         )
     }
+
+    /// use for user manual status command
+    pub fn get_status(&mut self) -> Response {
+        self.into()
+    }
 }
 
 fn format_errors(errors: &[ProgramError]) -> String {
@@ -217,4 +223,22 @@ fn format_errors(errors: &[ProgramError]) -> String {
         })
         .collect::<Vec<String>>()
         .join(", ")
+}
+
+pub fn new_shared_process_manager(config: &Config) -> SharedProcessManager {
+    Arc::new(RwLock::new(ProgramManager::new(config)))
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             From Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl Into<Response> for &mut ProgramManager {
+    fn into(self) -> Response {
+        Response::Status(
+            self.programs
+                .iter_mut()
+                .map(|(_, program)| program.into())
+                .collect(),
+        )
+    }
 }

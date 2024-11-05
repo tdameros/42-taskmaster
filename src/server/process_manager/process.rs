@@ -7,6 +7,7 @@ use crate::config::{ProgramConfig, Signal};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::{
+    borrow::BorrowMut,
     fmt::Display,
     fs,
     process::{Command, ExitStatus, Stdio},
@@ -353,5 +354,39 @@ impl std::error::Error for ProcessError {}
 impl Display for ProcessError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             From Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl Into<tcl::message::ProcessState> for &ProcessState {
+    fn into(self) -> tcl::message::ProcessState {
+        use tcl::message::ProcessState as OPS;
+        use ProcessState as PS;
+        match self {
+            PS::NeverStartedYet => OPS::NeverStartedYet,
+            PS::Stopped => OPS::Stopped,
+            PS::Starting => OPS::Starting,
+            PS::Running => OPS::Running,
+            PS::Backoff => OPS::Backoff,
+            PS::Stopping => OPS::Stopping,
+            PS::ExitedExpectedly => OPS::ExitedExpectedly,
+            PS::ExitedUnExpectedly => OPS::ExitedUnExpectedly,
+            PS::Fatal => OPS::Fatal,
+            PS::Unknown => OPS::Unknown,
+        }
+    }
+}
+
+impl Into<tcl::message::ProcessStatus> for &mut Process {
+    fn into(self) -> tcl::message::ProcessStatus {
+        tcl::message::ProcessStatus {
+            pid: self.get_child_id(),
+            status: (&self.state).into(),
+            start_time: self.started_since,
+            shutdown_time: self.time_since_shutdown,
+            number_of_restart: self.number_of_restart,
+        }
     }
 }

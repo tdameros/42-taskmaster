@@ -21,56 +21,6 @@ pub enum Command {
 }
 
 impl Command {
-    /// Try to produce a CliCommand enum based on the user input,
-    /// returning the appropriate error if enable
-    pub fn from_client_input(user_input: &str) -> Result<Command, TaskmasterError> {
-        // collect the user input into a vector for ease of processing
-        let arguments: Vec<&str> = user_input.split_ascii_whitespace().collect();
-
-        // check if too many or too little argument are present
-        if arguments.len() > 2 {
-            return Err(TaskmasterError::Custom(format!(
-                "`{}` contain to many arguments",
-                user_input
-            )));
-        } else if arguments.is_empty() {
-            return Err(TaskmasterError::Custom(
-                "your command contain nothing".to_owned(),
-            ));
-        }
-
-        // extract the first command from the user input
-        let command = arguments
-            .first()
-            .expect("unreachable")
-            .to_ascii_lowercase()
-            .to_owned();
-
-        // construct the CliCommand struct base on whenever there are only 1 or two word in the user input
-        let cli_command = if arguments.len() == 1 {
-            // try to match against command that need no argument
-            match command.deref() {
-                "exit" => Command::Exit,
-                "help" => Command::Help,
-                "status" => Command::Request(Request::Status),
-                "reload" => Command::Request(Request::Reload),
-                _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
-            }
-        } else {
-            // get the argument
-            let argument = arguments.get(1).expect("unreachable").to_ascii_lowercase();
-            // try to match against command that require one argument
-            match command.deref() {
-                "start" => Command::Request(Request::Start(argument.to_owned())),
-                "stop" => Command::Request(Request::Stop(argument.to_owned())),
-                "restart" => Command::Request(Request::Restart(argument.to_owned())),
-                _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
-            }
-        };
-
-        Ok(cli_command)
-    }
-
     /// This Function will match the command and execute it properly
     pub async fn execute(&self, stream: &mut TcpStream) -> Result<(), TaskmasterError> {
         match self {
@@ -213,5 +163,60 @@ impl Command {
         let minutes = (secs % 3600) / 60;
         let seconds = secs % 60;
         format!("{}:{:02}:{:02}", hours, minutes, seconds)
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Trait Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl TryFrom<&str> for Command {
+    type Error = TaskmasterError;
+
+    fn try_from(user_input: &str) -> Result<Self, Self::Error> {
+        // collect the user input into a vector for ease of processing
+        let arguments: Vec<&str> = user_input.split_ascii_whitespace().collect();
+
+        // check if too many or too little argument are present
+        if arguments.len() > 2 {
+            return Err(TaskmasterError::Custom(format!(
+                "`{}` contain to many arguments",
+                user_input
+            )));
+        } else if arguments.is_empty() {
+            return Err(TaskmasterError::Custom(
+                "your command contain nothing".to_owned(),
+            ));
+        }
+
+        // extract the first command from the user input
+        let command = arguments
+            .first()
+            .expect("unreachable")
+            .to_ascii_lowercase()
+            .to_owned();
+
+        // construct the CliCommand struct base on whenever there are only 1 or two word in the user input
+        let cli_command = if arguments.len() == 1 {
+            // try to match against command that need no argument
+            match command.deref() {
+                "exit" => Command::Exit,
+                "help" => Command::Help,
+                "status" => Command::Request(Request::Status),
+                "reload" => Command::Request(Request::Reload),
+                _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
+            }
+        } else {
+            // get the argument
+            let argument = arguments.get(1).expect("unreachable").to_ascii_lowercase();
+            // try to match against command that require one argument
+            match command.deref() {
+                "start" => Command::Request(Request::Start(argument.to_owned())),
+                "stop" => Command::Request(Request::Stop(argument.to_owned())),
+                "restart" => Command::Request(Request::Restart(argument.to_owned())),
+                _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
+            }
+        };
+
+        Ok(cli_command)
     }
 }

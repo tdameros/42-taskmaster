@@ -3,14 +3,14 @@
 /* -------------------------------------------------------------------------- */
 
 use std::{error::Error, fmt::Display, thread::sleep, time::Duration};
+use tcl::message::Response;
 
+use super::{OrderError, Process, ProcessError, Program, ProgramError};
 use crate::{
     config::{Config, ProgramConfig},
     log_error,
     logger::Logger,
 };
-
-use super::{OrderError, Process, ProcessError, Program, ProgramError};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -238,5 +238,35 @@ impl Display for ProgramError {
 impl From<ProcessError> for ProgramError {
     fn from(value: ProcessError) -> Self {
         ProgramError::Process(value)
+    }
+}
+
+impl Error for OrderError {}
+
+impl Display for OrderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             From Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl Into<tcl::message::ProgramStatus> for &mut Program {
+    fn into(self) -> tcl::message::ProgramStatus {
+        tcl::message::ProgramStatus {
+            name: self.name.to_owned(),
+            status: self
+                .process_vec
+                .iter_mut()
+                .map(|process| process.into())
+                .collect(),
+        }
+    }
+}
+
+impl Into<Response> for OrderError {
+    fn into(self) -> Response {
+        Response::Error(self.to_string())
     }
 }

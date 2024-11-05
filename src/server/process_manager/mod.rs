@@ -7,7 +7,7 @@ use crate::config::ProgramConfig;
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
-mod manager;
+pub(super) mod manager;
 mod process;
 mod program;
 mod state;
