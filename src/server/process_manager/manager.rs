@@ -2,8 +2,6 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use tcl::message::Response;
-
 use super::{Program, ProgramError, ProgramManager, SharedProcessManager};
 use crate::{
     config::Config,
@@ -16,6 +14,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
+use tcl::message::Response;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */

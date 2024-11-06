@@ -152,6 +152,13 @@ impl Config {
     }
 }
 
+pub(super) fn new_shared_config() -> Result<SharedConfig, TaskmasterError> {
+    Ok(Arc::new(RwLock::new(Config::load()?)))
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Parsing Functions                             */
+/* -------------------------------------------------------------------------- */
 fn parse_umask<'de, D>(deserializer: D) -> Result<Option<libc::mode_t>, D::Error>
 where
     D: Deserializer<'de>,
@@ -172,6 +179,17 @@ where
     }
 }
 
+fn default_exit_code() -> Vec<i32> {
+    vec![0]
+}
+
+fn default_graceful_shutdown() -> u64 {
+    1
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Trait Implementation                            */
+/* -------------------------------------------------------------------------- */
 impl Deref for Config {
     type Target = HashMap<String, ProgramConfig>;
 
@@ -184,16 +202,4 @@ impl DerefMut for Config {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
-}
-
-fn default_exit_code() -> Vec<i32> {
-    vec![0]
-}
-
-fn default_graceful_shutdown() -> u64 {
-    1
-}
-
-pub(super) fn new_shared_config() -> Result<SharedConfig, TaskmasterError> {
-    Ok(Arc::new(RwLock::new(Config::load()?)))
 }

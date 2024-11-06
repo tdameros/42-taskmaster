@@ -10,7 +10,7 @@ use tcl::{
 use tokio::net::TcpStream;
 
 /* -------------------------------------------------------------------------- */
-/*                                   Struct                                   */
+/*                             Struct Declaration                             */
 /* -------------------------------------------------------------------------- */
 /// this enum represent the set of all possible command that the client can receive
 pub enum Command {
@@ -19,6 +19,9 @@ pub enum Command {
     Help,
 }
 
+/* -------------------------------------------------------------------------- */
+/*                            Struct Implementation                           */
+/* -------------------------------------------------------------------------- */
 impl Command {
     /// This Function will match the command and execute it properly
     pub async fn execute(&self, stream: &mut TcpStream) -> Result<(), TaskmasterError> {

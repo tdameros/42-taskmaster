@@ -2,15 +2,14 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-use std::{error::Error, fmt::Display, thread::sleep, time::Duration};
-use tcl::message::Response;
-
 use super::{OrderError, Process, ProcessError, Program, ProgramError};
 use crate::{
     config::{Config, ProgramConfig},
     log_error,
     logger::Logger,
 };
+use std::{error::Error, fmt::Display, thread::sleep, time::Duration};
+use tcl::message::Response;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */

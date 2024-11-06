@@ -1,7 +1,13 @@
+/* -------------------------------------------------------------------------- */
+/*                                   Import                                   */
+/* -------------------------------------------------------------------------- */
 use std::error::Error;
 use std::fmt;
 
-#[derive(Default)]
+/* -------------------------------------------------------------------------- */
+/*                             Struct Declaration                             */
+/* -------------------------------------------------------------------------- */
+#[derive(Default, Debug)]
 pub struct History {
     history: Vec<String>,
     history_index: usize,
@@ -14,18 +20,9 @@ pub enum HistoryError {
     Empty,
 }
 
-impl fmt::Display for HistoryError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            HistoryError::Overflow => write!(f, "forward overflow, not enough history"),
-            HistoryError::Underflow => write!(f, "backward underflow, not enough history"),
-            HistoryError::Empty => write!(f, "History is empty."),
-        }
-    }
-}
-
-impl Error for HistoryError {}
-
+/* -------------------------------------------------------------------------- */
+/*                            Struct Implementation                           */
+/* -------------------------------------------------------------------------- */
 impl History {
     pub fn get_current_line(&self) -> Option<String> {
         if self.history.is_empty() {
@@ -94,3 +91,18 @@ impl History {
         }
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                            Error Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl fmt::Display for HistoryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HistoryError::Overflow => write!(f, "forward overflow, not enough history"),
+            HistoryError::Underflow => write!(f, "backward underflow, not enough history"),
+            HistoryError::Empty => write!(f, "History is empty."),
+        }
+    }
+}
+
+impl Error for HistoryError {}

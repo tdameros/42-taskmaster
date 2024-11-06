@@ -7,7 +7,7 @@ use std::error::Error;
 /* -------------------------------------------------------------------------- */
 /*                              Struct Definition                             */
 /* -------------------------------------------------------------------------- */
-/// represent the error the can occur using this lib function TODO check and maybe remove the error that arise from the binary usage ???
+/// represent the error the can occur using this lib function
 #[derive(Debug)]
 pub enum TaskmasterError {
     IoError(std::io::Error),

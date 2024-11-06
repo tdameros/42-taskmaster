@@ -101,12 +101,14 @@ struct Program {
     process_vec: Vec<Process>,
 }
 
+/// Represent the error that can occur on each process when asking for manual task
 #[derive(Debug)]
 enum ProgramError {
     Logic(String),
     Process(ProcessError),
 }
 
+/// represent the error that can happen when asking a vec of process a manual change
 #[derive(Debug)]
 enum OrderError {
     /// represent a partial success of an order given to a program it contain the
