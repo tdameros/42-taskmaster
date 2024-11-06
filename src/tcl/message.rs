@@ -220,17 +220,5 @@ impl Display for Response {
                 Ok(())
             }
         }
-        // match self {
-        //     Response::Success(_) => writeln!(f, "Success"),
-        //     Response::Error(e) => writeln!(f, "Error: {e}"),
-        //     Response::Status(vec) => {
-        //         writeln!(f, "Programs Status:")?;
-        //         writeln!(f)?;
-        //         for program_status in vec.iter() {
-        //             writeln!(f, "{program_status}")?;
-        //         }
-        //         Ok(())
-        //     }
-        // }
     }
 }

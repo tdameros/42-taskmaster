@@ -76,7 +76,7 @@ pub struct ProgramConfig {
     /// Environment variables to set before launching the program
     #[serde(rename = "env")]
     pub(super) environmental_variable_to_set: HashMap<String, String>,
-    // environmental_variable_to_set: Vec<(String, String)>,
+
     /// A working directory to set before launching the program
     #[serde(rename = "workingdir")]
     pub(super) working_directory: Option<String>,
