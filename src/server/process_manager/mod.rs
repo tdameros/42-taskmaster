@@ -79,7 +79,7 @@ enum ProcessState {
 
 /// represent the error that can occur while performing action on the process class
 #[derive(Debug)]
-enum ProcessError {
+pub enum ProcessError {
     /// an operation was perform on a child but no child were found (aka stopped or not launch yet)
     NoChild,
     ExitStatusNotFound(std::io::Error),

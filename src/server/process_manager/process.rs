@@ -244,7 +244,7 @@ impl Process {
     ///
     /// Returns:
     /// - `Ok(())` if the exit_status could be acquire without issue and the state
-    /// and change that need to be done were done.
+    ///     and change that need to be done were done.
     /// - `Err(ProcessError::ExitStatusNotFound)` if the exit status could not be read.
     /// - `Err(ProcessError::NoCommand)` if the command argument is empty.
     /// - `Err(ProcessError::FailedToCreateRedirection)` if the redirection argument couldn't be accessed found or create.
@@ -366,11 +366,11 @@ impl Display for ProcessError {
 /* -------------------------------------------------------------------------- */
 /*                             From Implementation                            */
 /* -------------------------------------------------------------------------- */
-impl Into<tcl::message::ProcessState> for &ProcessState {
-    fn into(self) -> tcl::message::ProcessState {
+impl From<&ProcessState> for tcl::message::ProcessState {
+    fn from(val: &ProcessState) -> Self {
         use tcl::message::ProcessState as OPS;
         use ProcessState as PS;
-        match self {
+        match val {
             PS::NeverStartedYet => OPS::NeverStartedYet,
             PS::Stopped => OPS::Stopped,
             PS::Starting => OPS::Starting,
@@ -385,14 +385,14 @@ impl Into<tcl::message::ProcessState> for &ProcessState {
     }
 }
 
-impl Into<tcl::message::ProcessStatus> for &mut Process {
-    fn into(self) -> tcl::message::ProcessStatus {
+impl From<&mut Process> for tcl::message::ProcessStatus {
+    fn from(val: &mut Process) -> Self {
         tcl::message::ProcessStatus {
-            pid: self.get_child_id(),
-            status: (&self.state).into(),
-            start_time: self.started_since,
-            shutdown_time: self.time_since_shutdown,
-            number_of_restart: self.number_of_restart,
+            pid: val.get_child_id(),
+            status: (&val.state).into(),
+            start_time: val.started_since,
+            shutdown_time: val.time_since_shutdown,
+            number_of_restart: val.number_of_restart,
         }
     }
 }

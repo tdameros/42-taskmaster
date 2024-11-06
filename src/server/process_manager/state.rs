@@ -34,18 +34,13 @@ impl Process {
     }
 
     pub(super) fn update_running(&mut self, code: Option<i32>) {
-        match code {
-            // the program is not running anymore
-            Some(code) => {
-                match self.config.expected_exit_code.contains(&code) {
-                    true => self.state = ProcessState::ExitedExpectedly,
-                    false => self.state = ProcessState::ExitedUnExpectedly,
-                };
-                self.clean_child();
-            }
-            // the program is still running
-            None => {}
-        };
+        if let Some(code) = code {
+            match self.config.expected_exit_code.contains(&code) {
+                true => self.state = ProcessState::ExitedExpectedly,
+                false => self.state = ProcessState::ExitedUnExpectedly,
+            };
+            self.clean_child();
+        }
     }
 
     pub(super) fn update_stopping(&mut self, code: Option<i32>) {

@@ -232,10 +232,10 @@ pub fn new_shared_process_manager(config: &Config) -> SharedProcessManager {
 /* -------------------------------------------------------------------------- */
 /*                             From Implementation                            */
 /* -------------------------------------------------------------------------- */
-impl Into<Response> for &mut ProgramManager {
-    fn into(self) -> Response {
+impl From<&mut ProgramManager> for Response {
+    fn from(val: &mut ProgramManager) -> Self {
         Response::Status(
-            self.programs
+            val.programs
                 .iter_mut()
                 .map(|(_, program)| program.into())
                 .collect(),

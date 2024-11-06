@@ -81,7 +81,7 @@ pub struct ProgramConfig {
     pub(super) working_directory: Option<String>,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", deserialize_with = "parse_umask")]
+    #[serde(rename = "umask", deserialize_with = "parse_umask", default)]
     pub(super) umask: Option<libc::mode_t>,
 }
 
@@ -172,15 +172,6 @@ where
     }
 }
 
-impl ProgramConfig {
-    pub(super) fn should_restart(&self, exit_code: i32) -> bool {
-        match self.expected_exit_code.contains(&exit_code) {
-            true => self.auto_restart == AutoRestart::Always,
-            false => self.auto_restart != AutoRestart::Never,
-        }
-    }
-}
-
 impl Deref for Config {
     type Target = HashMap<String, ProgramConfig>;
 
@@ -193,10 +184,6 @@ impl DerefMut for Config {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
-}
-
-fn default_umask() -> libc::mode_t {
-    0o022
 }
 
 fn default_exit_code() -> Vec<i32> {

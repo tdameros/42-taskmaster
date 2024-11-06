@@ -147,40 +147,69 @@ fn format_duration(duration: Duration) -> String {
     let hours = secs / 3600;
     let minutes = (secs % 3600) / 60;
     let seconds = secs % 60;
-    format!("{}:{:02}:{:02}", hours, minutes, seconds)
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }
 
 impl Display for ProcessState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:#?}")
+        write!(f, "{self:#10?}")
     }
 }
 
 impl Display for ProcessStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "state: {}", self.status)?;
-        match self.pid {
-            Some(pid) => writeln!(f, "Pid: {}", pid)?,
-            None => writeln!(f, "This process has no Pid")?,
-        }
-        match self.start_time {
-            Some(start_time) => writeln!(
-                f,
-                "started: {:#?}",
-                format_duration(start_time.duration_since(UNIX_EPOCH).unwrap())
-            )?,
-            None => writeln!(f, "Process not active yet")?,
-        }
-        match self.shutdown_time {
-            Some(shutdown_time) => writeln!(
-                f,
-                "stopping since: {:#?}",
-                format_duration(shutdown_time.duration_since(UNIX_EPOCH).unwrap())
-            )?,
-            None => writeln!(f, "Process not shutting down yet")?,
-        }
-        write!(f, "number of restart: {}", self.number_of_restart)?;
-        Ok(())
+        writeln!(f, "┌─ Process Status ───────────────────────────────────")?;
+        writeln!(f, "│ {:20} {}", "State:", self.status)?;
+        writeln!(
+            f,
+            "│ {:20} {}",
+            "PID:",
+            self.pid
+                .map_or("Not assigned".to_string(), |pid| pid.to_string())
+        )?;
+        writeln!(
+            f,
+            "│ {:20} {}",
+            "Started:",
+            self.start_time
+                .map_or("Not yet".to_string(), |time| format_duration(
+                    time.duration_since(UNIX_EPOCH).unwrap()
+                ))
+        )?;
+        writeln!(
+            f,
+            "│ {:20} {}",
+            "Stopping since:",
+            self.shutdown_time
+                .map_or("Not in progress".to_string(), |time| format_duration(
+                    time.duration_since(UNIX_EPOCH).unwrap()
+                ))
+        )?;
+        writeln!(f, "│ {:20} {}", "Restarts:", self.number_of_restart)?;
+        writeln!(f, "└────────────────────────────────────────────────────")
+        // writeln!(f, "state: {}", self.status)?;
+        // match self.pid {
+        //     Some(pid) => writeln!(f, "Pid: {}", pid)?,
+        //     None => writeln!(f, "This process has no Pid")?,
+        // }
+        // match self.start_time {
+        //     Some(start_time) => writeln!(
+        //         f,
+        //         "started: {}",
+        //         format_duration(start_time.duration_since(UNIX_EPOCH).unwrap())
+        //     )?,
+        //     None => writeln!(f, "Process not active yet")?,
+        // }
+        // match self.shutdown_time {
+        //     Some(shutdown_time) => writeln!(
+        //         f,
+        //         "stopping since: {}",
+        //         format_duration(shutdown_time.duration_since(UNIX_EPOCH).unwrap())
+        //     )?,
+        //     None => writeln!(f, "Process not shutting down yet")?,
+        // }
+        // write!(f, "number of restart: {}", self.number_of_restart)?;
+        // Ok(())
     }
 }
 
@@ -202,9 +231,9 @@ impl Display for Response {
             Response::Error(e) => writeln!(f, "Error: {e}"),
             Response::Status(vec) => {
                 writeln!(f, "Programs Status:")?;
-                writeln!(f, "")?;
+                writeln!(f)?;
                 for program_status in vec.iter() {
-                    writeln!(f, "{program_status}\n")?;
+                    writeln!(f, "{program_status}")?;
                 }
                 Ok(())
             }

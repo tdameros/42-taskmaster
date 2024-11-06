@@ -216,10 +216,7 @@ fn determine_order_result(results: Vec<Result<(), ProgramError>>) -> Result<(), 
         Err(OrderError::TotalFailure(process_errors))
     } else {
         Err(OrderError::PartialSuccess(
-            logic_errors
-                .into_iter()
-                .chain(process_errors.into_iter())
-                .collect(),
+            logic_errors.into_iter().chain(process_errors).collect(),
         ))
     }
 }
@@ -252,11 +249,11 @@ impl Display for OrderError {
 /* -------------------------------------------------------------------------- */
 /*                             From Implementation                            */
 /* -------------------------------------------------------------------------- */
-impl Into<tcl::message::ProgramStatus> for &mut Program {
-    fn into(self) -> tcl::message::ProgramStatus {
+impl From<&mut Program> for tcl::message::ProgramStatus {
+    fn from(value: &mut Program) -> Self {
         tcl::message::ProgramStatus {
-            name: self.name.to_owned(),
-            status: self
+            name: value.name.to_owned(),
+            status: value
                 .process_vec
                 .iter_mut()
                 .map(|process| process.into())
@@ -265,8 +262,8 @@ impl Into<tcl::message::ProgramStatus> for &mut Program {
     }
 }
 
-impl Into<Response> for OrderError {
-    fn into(self) -> Response {
-        Response::Error(self.to_string())
+impl From<OrderError> for Response {
+    fn from(value: OrderError) -> Self {
+        Response::Error(value.to_string())
     }
 }

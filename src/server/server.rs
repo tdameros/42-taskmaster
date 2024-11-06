@@ -17,7 +17,7 @@ use tokio::net::TcpListener;
 mod client_handler;
 mod config;
 mod logger;
-mod process_manager;
+pub mod process_manager;
 
 /* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
