@@ -187,38 +187,17 @@ impl Display for ProcessStatus {
         )?;
         writeln!(f, "│ {:20} {}", "Restarts:", self.number_of_restart)?;
         writeln!(f, "└────────────────────────────────────────────────────")
-        // writeln!(f, "state: {}", self.status)?;
-        // match self.pid {
-        //     Some(pid) => writeln!(f, "Pid: {}", pid)?,
-        //     None => writeln!(f, "This process has no Pid")?,
-        // }
-        // match self.start_time {
-        //     Some(start_time) => writeln!(
-        //         f,
-        //         "started: {}",
-        //         format_duration(start_time.duration_since(UNIX_EPOCH).unwrap())
-        //     )?,
-        //     None => writeln!(f, "Process not active yet")?,
-        // }
-        // match self.shutdown_time {
-        //     Some(shutdown_time) => writeln!(
-        //         f,
-        //         "stopping since: {}",
-        //         format_duration(shutdown_time.duration_since(UNIX_EPOCH).unwrap())
-        //     )?,
-        //     None => writeln!(f, "Process not shutting down yet")?,
-        // }
-        // write!(f, "number of restart: {}", self.number_of_restart)?;
-        // Ok(())
     }
 }
 
 impl Display for ProgramStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}: ", self.name)?;
-        for process in self.status.iter() {
-            writeln!(f, "---------------")?;
-            writeln!(f, "{process}")?;
+        writeln!(f, "Program: {}", self.name)?;
+        for (index, process) in self.status.iter().enumerate() {
+            if index > 0 {
+                writeln!(f)?;
+            }
+            write!(f, "{}", process)?;
         }
         Ok(())
     }
@@ -227,16 +206,31 @@ impl Display for ProgramStatus {
 impl Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Response::Success(_) => writeln!(f, "Success"),
-            Response::Error(e) => writeln!(f, "Error: {e}"),
+            Response::Success(_) => writeln!(f, "✅ {:15}", "Success"),
+            Response::Error(e) => writeln!(f, "❌ {:15} {}", "Error:", e),
             Response::Status(vec) => {
-                writeln!(f, "Programs Status:")?;
+                writeln!(f, "📊 Programs Status:")?;
                 writeln!(f)?;
-                for program_status in vec.iter() {
-                    writeln!(f, "{program_status}")?;
+                for (index, program_status) in vec.iter().enumerate() {
+                    if index > 0 {
+                        writeln!(f)?;
+                    }
+                    write!(f, "{}", program_status)?;
                 }
                 Ok(())
             }
         }
+        // match self {
+        //     Response::Success(_) => writeln!(f, "Success"),
+        //     Response::Error(e) => writeln!(f, "Error: {e}"),
+        //     Response::Status(vec) => {
+        //         writeln!(f, "Programs Status:")?;
+        //         writeln!(f)?;
+        //         for program_status in vec.iter() {
+        //             writeln!(f, "{program_status}")?;
+        //         }
+        //         Ok(())
+        //     }
+        // }
     }
 }
