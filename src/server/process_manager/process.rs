@@ -4,6 +4,7 @@
 
 use super::{Process, ProcessError, ProcessState};
 use crate::config::{ProgramConfig, Signal};
+use std::os::unix::process::CommandExt;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
 use std::{
@@ -283,6 +284,11 @@ impl Process {
         command.args(split_command);
         if let Some(dir) = &self.config.working_directory {
             command.current_dir(dir);
+        }
+        // privilege de-escalation
+        if let Some(user) = &self.config.de_escalation_user {
+            command.uid(user.uid);
+            command.gid(user.gid);
         }
         self.set_command_redirection(&mut command)
             .map_err(ProcessError::FailedToCreateRedirection)?;

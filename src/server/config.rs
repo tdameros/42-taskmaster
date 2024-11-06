@@ -5,6 +5,7 @@
 use serde::de::{self, Unexpected};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
@@ -83,6 +84,17 @@ pub struct ProgramConfig {
     /// An umask to set before launching the program
     #[serde(rename = "umask", deserialize_with = "parse_umask", default)]
     pub(super) umask: Option<libc::mode_t>,
+
+    /// Execute the process with a specific user (root required)
+    #[serde(rename = "user", default, deserialize_with = "parse_user")]
+    pub(super) de_escalation_user: Option<User>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct User {
+    pub username: String,
+    pub uid: libc::uid_t,
+    pub gid: libc::gid_t,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -177,6 +189,45 @@ where
     } else {
         Ok(None)
     }
+}
+
+fn parse_user<'de, D>(deserializer: D) -> Result<Option<User>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let user_deserialize = Option::<String>::deserialize(deserializer)?;
+    match user_deserialize {
+        Some(user_str) => {
+            if let Some(user) = get_all_users()
+                .iter()
+                .find(|u| u.username == user_str)
+                .cloned()
+            {
+                Ok(Some(user))
+            } else {
+                Err(de::Error::custom("invalid user"))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+fn get_all_users() -> Vec<User> {
+    let mut users: Vec<User> = Vec::new();
+    unsafe {
+        libc::setpwent();
+        while let Some(user) = libc::getpwent().as_mut() {
+            let username = CStr::from_ptr(user.pw_name);
+            if let Ok(username) = username.to_str() {
+                users.push(User {
+                    username: username.to_owned(),
+                    uid: user.pw_uid,
+                    gid: user.pw_gid,
+                })
+            }
+        }
+    }
+    users
 }
 
 fn default_exit_code() -> Vec<i32> {
