@@ -97,9 +97,9 @@ impl Process {
                 }
             },
             O::Equal | O::Greater => {
-                if !self.config.unexpected_exit_report_address.is_empty() {
+                if !self.config.fatal_state_report_address.is_empty() {
                     send_http_message(
-                        self.config.unexpected_exit_report_address.to_owned(),
+                        self.config.fatal_state_report_address.to_owned(),
                         format!("one process of {program_name} could not be launch successfully"),
                     );
                 }

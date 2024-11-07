@@ -90,7 +90,7 @@ pub struct ProgramConfig {
     pub(super) de_escalation_user: Option<User>,
 
     #[serde(default)]
-    pub(super) unexpected_exit_report_address: String,
+    pub(super) fatal_state_report_address: String,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
