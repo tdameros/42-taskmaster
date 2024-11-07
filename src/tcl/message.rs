@@ -11,8 +11,10 @@
 /* -------------------------------------------------------------------------- */
 use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::time::SystemTime;
+use std::{
+    fmt::Display,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -26,7 +28,7 @@ use tokio::{
 pub enum Response {
     Success(String),
     Error(String),
-    Status(HashMap<String, Vec<ProcessState>>),
+    Status(Vec<ProgramStatus>),
 }
 
 /// Represent what can be send to the server as request
@@ -39,21 +41,53 @@ pub enum Request {
     Reload,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum ProcessStatus {
-    Stopped,
-    Stopping,
-    Starting,
-    Running,
-    Fatal(String),
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProgramStatus {
+    pub name: String,
+    pub status: Vec<ProcessStatus>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProcessState {
-    pub status: ProcessStatus,
-    pub pid: u32,
-    pub start_time: SystemTime,
+pub struct ProcessStatus {
+    pub status: ProcessState,
+    pub pid: Option<u32>,
+    pub start_time: Option<SystemTime>,
     pub shutdown_time: Option<SystemTime>,
+    pub number_of_restart: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ProcessState {
+    /// the default state, has never been started.
+    NeverStartedYet,
+
+    /// The process has been stopped due to a stop request
+    Stopped,
+
+    /// The process is starting due to a start request.
+    Starting,
+
+    /// The process is running.
+    Running,
+
+    /// The process entered the Starting state but subsequently exited too quickly
+    /// (before the time defined in time_to_start) to move to the Running state.
+    Backoff,
+
+    /// The process is stopping due to a stop request.
+    Stopping,
+
+    /// The process exited from the RUNNING state expectedly.
+    ExitedExpectedly,
+
+    /// The process exited from the RUNNING state unexpectedly.
+    ExitedUnExpectedly,
+
+    /// The process could not be started successfully.
+    Fatal,
+
+    /// The process is in an unknown state (error while getting the exit status).
+    Unknown,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -103,4 +137,88 @@ pub async fn receive<T: for<'a> Deserialize<'a>>(
 
     // return the message if everything went right
     Ok(received_message)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                           Display Implementation                           */
+/* -------------------------------------------------------------------------- */
+fn format_duration(duration: Duration) -> String {
+    let secs = duration.as_secs();
+    let hours = secs / 3600;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+}
+
+impl Display for ProcessState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:#10?}")
+    }
+}
+
+impl Display for ProcessStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "┌─ Process Status ───────────────────────────────────")?;
+        writeln!(f, "│ {:20} {}", "State:", self.status)?;
+        writeln!(
+            f,
+            "│ {:20} {}",
+            "PID:",
+            self.pid
+                .map_or("Not assigned".to_string(), |pid| pid.to_string())
+        )?;
+        writeln!(
+            f,
+            "│ {:20} {}",
+            "Started:",
+            self.start_time
+                .map_or("Not yet".to_string(), |time| format_duration(
+                    time.duration_since(UNIX_EPOCH).unwrap()
+                ))
+        )?;
+        writeln!(
+            f,
+            "│ {:20} {}",
+            "Stopping since:",
+            self.shutdown_time
+                .map_or("Not in progress".to_string(), |time| format_duration(
+                    time.duration_since(UNIX_EPOCH).unwrap()
+                ))
+        )?;
+        writeln!(f, "│ {:20} {}", "Restarts:", self.number_of_restart)?;
+        writeln!(f, "└────────────────────────────────────────────────────")
+    }
+}
+
+impl Display for ProgramStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Program: {}", self.name)?;
+        for (index, process) in self.status.iter().enumerate() {
+            if index > 0 {
+                writeln!(f)?;
+            }
+            write!(f, "{}", process)?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Response::Success(_) => writeln!(f, "✅ {:15}", "Success"),
+            Response::Error(e) => writeln!(f, "❌ {:15} {}", "Error:", e),
+            Response::Status(vec) => {
+                writeln!(f, "📊 Programs Status:")?;
+                writeln!(f)?;
+                for (index, program_status) in vec.iter().enumerate() {
+                    if index > 0 {
+                        writeln!(f)?;
+                    }
+                    write!(f, "{}", program_status)?;
+                }
+                Ok(())
+            }
+        }
+    }
 }

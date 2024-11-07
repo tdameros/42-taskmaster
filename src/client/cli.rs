@@ -1,9 +1,15 @@
+/* -------------------------------------------------------------------------- */
+/*                                   Import                                   */
+/* -------------------------------------------------------------------------- */
 use crate::history::History;
 use libc::{tcgetattr, tcsetattr, termios, ECHO, ICANON, TCSANOW};
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 use tcl::error::TaskmasterError;
 
+/* -------------------------------------------------------------------------- */
+/*                                  Constants                                 */
+/* -------------------------------------------------------------------------- */
 const ESCAPE_KEY: u8 = 0x1B;
 const BACKSPACE: u8 = 0x7F;
 const CLEAR_LINE: &str = "\x1B[2K";
@@ -13,12 +19,18 @@ const ARROW_UP: [u8; 3] = [ESCAPE_KEY, b'[', b'A'];
 const ARROW_DOWN: [u8; 3] = [ESCAPE_KEY, b'[', b'B'];
 const PROMPT: &str = "> ";
 
+/* -------------------------------------------------------------------------- */
+/*                             Struct Declaration                             */
+/* -------------------------------------------------------------------------- */
 #[derive(Default)]
 pub struct Cli {
     line: String,
     history: History,
 }
 
+/* -------------------------------------------------------------------------- */
+/*                            Struct Implementation                           */
+/* -------------------------------------------------------------------------- */
 impl Cli {
     pub fn new() -> Self {
         Self::default()

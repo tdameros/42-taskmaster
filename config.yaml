@@ -1,8 +1,7 @@
-programs:
   nginx:
     cmd: "ping google.com"
-    numprocs: 1
-    umask: 22
+    numprocs: 2
+    umask: 77
     workingdir: /tmp
     autostart: true
     autorestart: unexpected

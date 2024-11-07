@@ -6,6 +6,7 @@ use serde::de::{self, Unexpected};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::ffi::CStr;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
 use tcl::error::TaskmasterError;
@@ -21,14 +22,12 @@ const CONFIG_FILE_PATH: &str = "./config.yaml";
 pub(super) type SharedConfig = Arc<RwLock<Config>>;
 
 /// struct representing the process the server should monitor
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct Config {
-    #[serde(default)]
-    pub programs: HashMap<String, ProgramConfig>,
-}
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Config(#[serde(default)] HashMap<String, ProgramConfig>);
 
 /// represent all configuration of a monitored program
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
+#[serde(default)]
 pub struct ProgramConfig {
     /// The command to use to launch the program
     #[serde(rename = "cmd", default)]
@@ -47,7 +46,7 @@ pub struct ProgramConfig {
     pub(super) auto_restart: AutoRestart,
 
     /// Which return codes represent an "expected" exit status
-    #[serde(rename = "exitcodes", default)]
+    #[serde(rename = "exitcodes", default = "default_exit_code")]
     pub(super) expected_exit_code: Vec<i32>,
 
     /// How long the program should be running after it’s started for it to be considered "successfully started"
@@ -55,7 +54,6 @@ pub struct ProgramConfig {
     pub(super) time_to_start: u64,
 
     /// How many times a restart should be attempted before aborting
-    /// this is shared between replica
     #[serde(rename = "startretries", default)]
     pub(super) max_number_of_restart: u32,
 
@@ -64,7 +62,7 @@ pub struct ProgramConfig {
     pub(super) stop_signal: Signal,
 
     /// How long to wait after a graceful stop before killing the program
-    #[serde(rename = "stoptime", default)]
+    #[serde(rename = "stoptime", default = "default_graceful_shutdown")]
     pub(super) time_to_stop_gracefully: u64,
 
     /// Optional stdout redirection
@@ -77,14 +75,14 @@ pub struct ProgramConfig {
 
     /// Environment variables to set before launching the program
     #[serde(rename = "env")]
-    pub(super) environmental_variable_to_set: Option<HashMap<String, String>>,
+    pub(super) environmental_variable_to_set: HashMap<String, String>,
 
     /// A working directory to set before launching the program
     #[serde(rename = "workingdir")]
     pub(super) working_directory: Option<String>,
 
     /// An umask to set before launching the program
-    #[serde(rename = "umask", default, deserialize_with = "parse_umask")]
+    #[serde(rename = "umask", deserialize_with = "parse_umask", default)]
     pub(super) umask: Option<libc::mode_t>,
 
     /// Execute the process with a specific user (root required)
@@ -92,7 +90,7 @@ pub struct ProgramConfig {
     pub(super) de_escalation_user: Option<User>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct User {
     pub username: String,
     pub uid: libc::uid_t,
@@ -101,7 +99,7 @@ pub struct User {
 
 /// this enum represent whenever a program should be auto restart if it's termination
 /// has been detected
-#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub enum AutoRestart {
     #[serde(rename = "always")]
     Always,
@@ -117,7 +115,7 @@ pub enum AutoRestart {
 
 /// represent all the signal
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub enum Signal {
     SIGABRT,
     SIGALRM,
@@ -152,10 +150,6 @@ pub enum Signal {
     SIGWINCH,
 }
 
-pub(super) fn new_shared_config() -> Result<SharedConfig, Box<dyn std::error::Error>> {
-    Ok(Arc::new(RwLock::new(Config::load()?)))
-}
-
 /* -------------------------------------------------------------------------- */
 /*                               Implementation                               */
 /* -------------------------------------------------------------------------- */
@@ -170,6 +164,13 @@ impl Config {
     }
 }
 
+pub(super) fn new_shared_config() -> Result<SharedConfig, TaskmasterError> {
+    Ok(Arc::new(RwLock::new(Config::load()?)))
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Parsing Functions                             */
+/* -------------------------------------------------------------------------- */
 fn parse_umask<'de, D>(deserializer: D) -> Result<Option<libc::mode_t>, D::Error>
 where
     D: Deserializer<'de>,
@@ -229,11 +230,27 @@ fn get_all_users() -> Vec<User> {
     users
 }
 
-impl ProgramConfig {
-    pub(super) fn should_restart(&self, exit_code: i32) -> bool {
-        match self.expected_exit_code.contains(&exit_code) {
-            true => self.auto_restart == AutoRestart::Always,
-            false => self.auto_restart != AutoRestart::Never,
-        }
+fn default_exit_code() -> Vec<i32> {
+    vec![0]
+}
+
+fn default_graceful_shutdown() -> u64 {
+    1
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Trait Implementation                            */
+/* -------------------------------------------------------------------------- */
+impl Deref for Config {
+    type Target = HashMap<String, ProgramConfig>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Config {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
