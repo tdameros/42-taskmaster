@@ -88,6 +88,9 @@ pub struct ProgramConfig {
     /// Execute the process with a specific user (root required)
     #[serde(rename = "user", default, deserialize_with = "parse_user")]
     pub(super) de_escalation_user: Option<User>,
+
+    #[serde(default)]
+    pub(super) unexpected_exit_report_address: String,
 }
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]

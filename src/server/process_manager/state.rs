@@ -2,6 +2,8 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+use crate::better_logs::send_http_message;
+
 use super::{Process, ProcessError, ProcessState};
 
 /* -------------------------------------------------------------------------- */
@@ -81,7 +83,7 @@ impl Process {
         Ok(())
     }
 
-    pub(super) fn react_backoff(&mut self) -> Result<(), ProcessError> {
+    pub(super) fn react_backoff(&mut self, program_name: &str) -> Result<(), ProcessError> {
         use std::cmp::Ordering as O;
         match self
             .number_of_restart
@@ -95,6 +97,12 @@ impl Process {
                 }
             },
             O::Equal | O::Greater => {
+                if !self.config.unexpected_exit_report_address.is_empty() {
+                    send_http_message(
+                        self.config.unexpected_exit_report_address.to_owned(),
+                        format!("one process of {program_name} could not be launch successfully"),
+                    );
+                }
                 self.state = ProcessState::Fatal;
             }
         };

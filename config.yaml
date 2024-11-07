@@ -19,7 +19,7 @@
       ANSWER: 42
   vogsphere:
     cmd: "/bin/ls"
-    numprocs: 1
+    numprocs: 2
     umask: 77
     workingdir: /tmp
     autostart: true
@@ -32,3 +32,4 @@
     stoptime: 10
     stdout: /tmp/vgsworker.stdout
     stderr: /tmp/vgsworker.stderrprograms
+    unexpected_exit_report_address: "127.0.0.1:8080"
