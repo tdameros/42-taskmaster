@@ -32,4 +32,4 @@
     stoptime: 10
     stdout: /tmp/vgsworker.stdout
     stderr: /tmp/vgsworker.stderrprograms
-    unexpected_exit_report_address: "127.0.0.1:8080"
+    fatal_state_report_address: "127.0.0.1:8080"
