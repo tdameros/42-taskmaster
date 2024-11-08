@@ -21,3 +21,28 @@ async fn main() -> std::io::Result<()> {
         .run()
         .await
 }
+
+// use to demonstrate that with request it work
+// use reqwest;
+// use serde_json::json;
+
+// #[tokio::main]
+// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//     let access_token = "o.8bTjZDwKe70TfNqzjMm42HfCcSYkFqA5";
+//     let client = reqwest::Client::new();
+
+//     let res = client.post("https://api.pushbullet.com/v2/pushes")
+//         .header("Access-Token", access_token)
+//         .json(&json!({
+//             "type": "note",
+//             "title": "Test Notification",
+//             "body": "This is a test message from Rust!"
+//         }))
+//         .send()
+//         .await?;
+
+//     println!("Status: {}", res.status());
+//     println!("Response: {}", res.text().await?);
+
+//     Ok(())
+// }

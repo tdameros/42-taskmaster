@@ -39,3 +39,39 @@ pub fn send_http_message(address: String, message: String) {
         println!("Server response: {}", response);
     });
 }
+
+pub fn send_notification(token: String, title: String, body: String) {
+    thread::spawn(move || {
+        // Connect to the Pushbullet API server
+        let mut stream = TcpStream::connect("api.pushbullet.com:443").unwrap();
+
+        // Prepare the JSON payload
+        let json_payload = format!(
+            r#"{{"type":"note","title":"{}","body":"{}"}}"#,
+            title.replace("\"", "\\\""),
+            body.replace("\"", "\\\"")
+        );
+
+        // Construct the HTTP POST request
+        let request = format!(
+            "POST /v2/pushes HTTP/1.1\r\n\
+         Host: api.pushbullet.com\r\n\
+         Authorization: Bearer {}\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         \r\n\
+         {}",
+            token,
+            json_payload.len(),
+            json_payload
+        );
+
+        // Send the request
+        stream.write_all(request.as_bytes()).unwrap();
+
+        // Read and discard the response
+        let mut response = String::new();
+        let _ = stream.read_to_string(&mut response);
+        println!("--{response}--");
+    });
+}
