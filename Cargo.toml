@@ -19,4 +19,3 @@ path = "src/tcl/lib.rs"
 serde = { version = "1.0.210", features = ["derive"] } # used to tell other crate how to transform a struct
 serde_yaml = "0.9.34" # used to transform a struct into a yaml format
 tokio = { version = "1.40.0", features = ["full"] } # used to create the client/server architecture
-libc = "0.2.159"

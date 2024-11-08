@@ -83,7 +83,7 @@ pub struct ProgramConfig {
 
     /// An umask to set before launching the program
     #[serde(rename = "umask", deserialize_with = "parse_umask", default)]
-    pub(super) umask: Option<libc::mode_t>,
+    pub(super) umask: Option<tcl::mylibc::mode_t>,
 
     /// Execute the process with a specific user (root required)
     #[serde(rename = "user", default, deserialize_with = "parse_user")]
@@ -93,8 +93,8 @@ pub struct ProgramConfig {
 #[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct User {
     pub username: String,
-    pub uid: libc::uid_t,
-    pub gid: libc::gid_t,
+    pub uid: tcl::mylibc::uid_t,
+    pub gid: tcl::mylibc::gid_t,
 }
 
 /// this enum represent whenever a program should be auto restart if it's termination
@@ -171,7 +171,7 @@ pub(super) fn new_shared_config() -> Result<SharedConfig, TaskmasterError> {
 /* -------------------------------------------------------------------------- */
 /*                              Parsing Functions                             */
 /* -------------------------------------------------------------------------- */
-fn parse_umask<'de, D>(deserializer: D) -> Result<Option<libc::mode_t>, D::Error>
+fn parse_umask<'de, D>(deserializer: D) -> Result<Option<tcl::mylibc::mode_t>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -183,7 +183,7 @@ where
                 &"octal number",
             ));
         }
-        libc::mode_t::from_str_radix(&umask_str, 8)
+        tcl::mylibc::mode_t::from_str_radix(&umask_str, 8)
             .map(Some)
             .map_err(|_| de::Error::custom("invalid umask"))
     } else {
@@ -214,19 +214,17 @@ where
 
 fn get_all_users() -> Vec<User> {
     let mut users: Vec<User> = Vec::new();
-    unsafe {
-        libc::setpwent();
-        while let Some(user) = libc::getpwent().as_mut() {
-            let username = CStr::from_ptr(user.pw_name);
-            if let Ok(username) = username.to_str() {
-                users.push(User {
-                    username: username.to_owned(),
-                    uid: user.pw_uid,
-                    gid: user.pw_gid,
-                })
-            }
+    tcl::mylibc::setpwent();
+    while let Some(user) = tcl::mylibc::getpwent().as_mut() {
+        if let Some(username) = tcl::mylibc::ptr_to_string(user.pw_name) {
+            users.push(User {
+                username: username.to_owned(),
+                uid: user.pw_uid,
+                gid: user.pw_gid,
+            })
         }
     }
+    tcl::mylibc::endpwent();
     users
 }
 

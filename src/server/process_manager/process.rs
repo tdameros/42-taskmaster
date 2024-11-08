@@ -151,11 +151,11 @@ impl Process {
     pub(super) fn send_signal(&mut self, signal: &Signal) -> Result<(), ProcessError> {
         let child = self.child.as_ref().ok_or(ProcessError::NoChild)?;
         let signal_number = Self::signal_to_libc(signal);
-        let result = unsafe { libc::kill(child.id() as libc::pid_t, signal_number as libc::c_int) };
-
-        if result == -1 {
-            return Err(ProcessError::Signal(std::io::Error::last_os_error()));
-        }
+        tcl::mylibc::kill(
+            child.id() as tcl::mylibc::pid_t,
+            signal_number as std::ffi::c_int,
+        )
+        .map_err(|e| ProcessError::Signal(e))?;
 
         self.time_since_shutdown = Some(SystemTime::now());
         self.started_since = None;
@@ -164,38 +164,38 @@ impl Process {
     }
 
     /// Convert our Signal enum to libc signal constants
-    fn signal_to_libc(signal: &Signal) -> libc::c_int {
+    fn signal_to_libc(signal: &Signal) -> std::ffi::c_int {
         match signal {
-            Signal::SIGABRT => libc::SIGABRT,
-            Signal::SIGALRM => libc::SIGALRM,
-            Signal::SIGBUS => libc::SIGBUS,
-            Signal::SIGCHLD => libc::SIGCHLD,
-            Signal::SIGCONT => libc::SIGCONT,
-            Signal::SIGFPE => libc::SIGFPE,
-            Signal::SIGHUP => libc::SIGHUP,
-            Signal::SIGILL => libc::SIGILL,
-            Signal::SIGINT => libc::SIGINT,
-            Signal::SIGKILL => libc::SIGKILL,
-            Signal::SIGPIPE => libc::SIGPIPE,
+            Signal::SIGABRT => tcl::mylibc::SIGABRT,
+            Signal::SIGALRM => tcl::mylibc::SIGALRM,
+            Signal::SIGBUS => tcl::mylibc::SIGBUS,
+            Signal::SIGCHLD => tcl::mylibc::SIGCHLD,
+            Signal::SIGCONT => tcl::mylibc::SIGCONT,
+            Signal::SIGFPE => tcl::mylibc::SIGFPE,
+            Signal::SIGHUP => tcl::mylibc::SIGHUP,
+            Signal::SIGILL => tcl::mylibc::SIGILL,
+            Signal::SIGINT => tcl::mylibc::SIGINT,
+            Signal::SIGKILL => tcl::mylibc::SIGKILL,
+            Signal::SIGPIPE => tcl::mylibc::SIGPIPE,
             #[cfg(target_os = "linux")]
-            Signal::SIGPOLL => libc::SIGPOLL,
-            Signal::SIGPROF => libc::SIGPROF,
-            Signal::SIGQUIT => libc::SIGQUIT,
-            Signal::SIGSEGV => libc::SIGSEGV,
-            Signal::SIGSTOP => libc::SIGSTOP,
-            Signal::SIGSYS => libc::SIGSYS,
-            Signal::SIGTERM => libc::SIGTERM,
-            Signal::SIGTRAP => libc::SIGTRAP,
-            Signal::SIGTSTP => libc::SIGTSTP,
-            Signal::SIGTTIN => libc::SIGTTIN,
-            Signal::SIGTTOU => libc::SIGTTOU,
-            Signal::SIGUSR1 => libc::SIGUSR1,
-            Signal::SIGUSR2 => libc::SIGUSR2,
-            Signal::SIGURG => libc::SIGURG,
-            Signal::SIGVTALRM => libc::SIGVTALRM,
-            Signal::SIGXCPU => libc::SIGXCPU,
-            Signal::SIGXFSZ => libc::SIGXFSZ,
-            Signal::SIGWINCH => libc::SIGWINCH,
+            Signal::SIGPOLL => tcl::mylibc::SIGPOLL,
+            Signal::SIGPROF => tcl::mylibc::SIGPROF,
+            Signal::SIGQUIT => tcl::mylibc::SIGQUIT,
+            Signal::SIGSEGV => tcl::mylibc::SIGSEGV,
+            Signal::SIGSTOP => tcl::mylibc::SIGSTOP,
+            Signal::SIGSYS => tcl::mylibc::SIGSYS,
+            Signal::SIGTERM => tcl::mylibc::SIGTERM,
+            Signal::SIGTRAP => tcl::mylibc::SIGTRAP,
+            Signal::SIGTSTP => tcl::mylibc::SIGTSTP,
+            Signal::SIGTTIN => tcl::mylibc::SIGTTIN,
+            Signal::SIGTTOU => tcl::mylibc::SIGTTOU,
+            Signal::SIGUSR1 => tcl::mylibc::SIGUSR1,
+            Signal::SIGUSR2 => tcl::mylibc::SIGUSR2,
+            Signal::SIGURG => tcl::mylibc::SIGURG,
+            Signal::SIGVTALRM => tcl::mylibc::SIGVTALRM,
+            Signal::SIGXCPU => tcl::mylibc::SIGXCPU,
+            Signal::SIGXFSZ => tcl::mylibc::SIGXFSZ,
+            Signal::SIGWINCH => tcl::mylibc::SIGWINCH,
         }
     }
 
@@ -277,7 +277,8 @@ impl Process {
     pub(super) fn start(&mut self) -> Result<(), ProcessError> {
         let mut split_command = self.config.command.split_whitespace();
         let program = split_command.next().ok_or(ProcessError::NoCommand)?;
-        let original_umask: Option<libc::mode_t> = self.config.umask.map(Self::set_umask);
+        let original_umask: Option<tcl::mylibc::mode_t> =
+            self.config.umask.map(tcl::mylibc::set_umask);
         let mut command = Command::new(program);
 
         command.envs(&self.config.environmental_variable_to_set);
@@ -296,7 +297,7 @@ impl Process {
         let child = command.spawn().map_err(ProcessError::CouldNotSpawnChild)?;
 
         if let Some(umask) = original_umask {
-            Self::set_umask(umask);
+            tcl::mylibc::set_umask(umask);
         }
 
         self.child = Some(child);
@@ -305,11 +306,6 @@ impl Process {
         self.time_since_shutdown = None;
 
         Ok(())
-    }
-
-    /// Set new umask and return the previous value
-    fn set_umask(new_umask: libc::mode_t) -> libc::mode_t {
-        unsafe { libc::umask(new_umask) }
     }
 
     fn set_command_redirection(&self, command: &mut Command) -> Result<(), std::io::Error> {

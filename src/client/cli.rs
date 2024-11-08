@@ -2,10 +2,10 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 use crate::history::History;
-use libc::{tcgetattr, tcsetattr, termios, ECHO, ICANON, TCSANOW};
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 use tcl::error::TaskmasterError;
+use tcl::mylibc::{ECHO, ICANON, TCSANOW};
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
@@ -37,7 +37,7 @@ impl Cli {
     }
 
     pub fn read_line(&mut self) -> Result<String, TaskmasterError> {
-        let origin_termios = Self::enable_raw_mode();
+        let origin_termios = Self::enable_raw_mode()?;
         Self::display_prompt()?;
         self.history.push(String::new());
         let _ = self.history.restore();
@@ -54,34 +54,22 @@ impl Cli {
         }
         let return_line = self.line.clone();
         self.line.clear();
-        Self::disable_raw_mode(origin_termios);
+        tcl::mylibc::disable_raw_mode(origin_termios);
         Ok(return_line)
     }
 
     /// Enable raw mode to read single keypresses without waiting for Enter
-    fn enable_raw_mode() -> termios {
+    fn enable_raw_mode() -> Result<tcl::mylibc::Termios, std::io::Error> {
         let fd = io::stdin().as_raw_fd();
-        let mut termios = unsafe {
-            let mut termios = std::mem::zeroed();
-            tcgetattr(fd, &mut termios);
-            termios
-        };
+        let mut termios = tcl::mylibc::get_terminal_attributes(fd)?;
 
         let orig_termios = termios;
         // Disable canonical mode and echo
-        termios.c_lflag &= !(ICANON | ECHO);
+        termios.c_lflag &= !((ICANON | ECHO) as u32);
         // Apply changes immediately
-        unsafe { tcsetattr(fd, TCSANOW, &termios) };
+        tcl::mylibc::set_terminal_attributes(fd, TCSANOW, &termios)?;
 
-        orig_termios
-    }
-
-    /// Restore the terminal to its original settings
-    fn disable_raw_mode(orig_termios: termios) {
-        let fd = io::stdin().as_raw_fd();
-        unsafe {
-            tcsetattr(fd, TCSANOW, &orig_termios);
-        }
+        Ok(orig_termios)
     }
 
     /// Function to read a single keypress, including escape sequences
