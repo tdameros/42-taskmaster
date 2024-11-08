@@ -40,6 +40,7 @@ pub fn send_http_message(address: String, message: String) {
     });
 }
 
+#[cfg(feature = "reqwest")]
 pub fn send_notification(token: String, title: String, body: String) {
     thread::spawn(move || {
         // Connect to the Pushbullet API server

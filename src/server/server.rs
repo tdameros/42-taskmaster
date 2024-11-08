@@ -2,6 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
+#[cfg(feature = "better_log")]
 use better_logs::send_notification;
 use client_handler::ClientHandler;
 use logger::{new_shared_logger, SharedLogger};
