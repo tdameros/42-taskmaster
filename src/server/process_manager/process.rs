@@ -4,6 +4,7 @@
 
 use super::{Process, ProcessError, ProcessState};
 use crate::config::{ProgramConfig, Signal};
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
