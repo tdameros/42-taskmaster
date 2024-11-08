@@ -1,32 +1,40 @@
-use std::ffi::{c_char, c_int, CStr};
+/* -------------------------------------------------------------------------- */
+/*                                   Import                                   */
+/* -------------------------------------------------------------------------- */
 
+use std::{
+    ffi::{c_char, c_int, CStr},
+    io,
+    os::unix::io::AsRawFd,
+};
+
+/* -------------------------------------------------------------------------- */
+/*                                   Module                                   */
+/* -------------------------------------------------------------------------- */
 mod raw;
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct Termios {
-    pub c_iflag: tcflag_t,  // Input mode flags
-    pub c_oflag: tcflag_t,  // Output mode flags
-    pub c_cflag: tcflag_t,  // Control mode flags
-    pub c_lflag: tcflag_t,  // Local mode flags
-    pub c_line: u8,         // Line discipline
-    pub c_cc: [cc_t; NCCS], // Control characters
-    pub c_ispeed: speed_t,  // Input speed
-    pub c_ospeed: speed_t,  // Output speed
-}
-
-// Define types for compatibility with C
-pub type tcflag_t = u32; // or u16 depending on your platform
-pub type cc_t = u8; // Control character type
-pub type speed_t = u32; // Speed type (usually an unsigned integer)
-
-pub type mode_t = u32; // or u16 on some systems
-pub type uid_t = u32; // or u16 on some systems
-pub type gid_t = u32; // or u16 on some systems
+/* -------------------------------------------------------------------------- */
+/*                                    Types                                   */
+/* -------------------------------------------------------------------------- */
+#[allow(non_camel_case_types)]
+pub type tcflag_t = u32;
+#[allow(non_camel_case_types)]
+pub type cc_t = u8;
+#[allow(non_camel_case_types)]
+pub type speed_t = u32;
+#[allow(non_camel_case_types)]
+pub type mode_t = u32;
+#[allow(non_camel_case_types)]
+pub type uid_t = u32;
+#[allow(non_camel_case_types)]
+pub type gid_t = u32;
+#[allow(non_camel_case_types)]
 pub type pid_t = i32;
 
-pub const NCCS: usize = 32; // Number of control characters
-
+/* -------------------------------------------------------------------------- */
+/*                                  Constants                                 */
+/* -------------------------------------------------------------------------- */
+// Signals
 pub const SIGABRT: c_int = 6;
 pub const SIGALRM: c_int = 14;
 pub const SIGBUS: c_int = 7;
@@ -59,12 +67,29 @@ pub const SIGXFSZ: c_int = 25;
 pub const SIGWINCH: c_int = 28;
 
 // Terminal control flags
-pub const ECHO: i32 = 0o00000100; // Enable echoing of input characters
-pub const ICANON: i32 = 0o00000002; // Canonical mode (line buffering)
-pub const TCSANOW: i32 = 0; // Change attributes immediately
+pub const NCCS: usize = 32;
+pub const ECHO: tcflag_t = 8;
+pub const ICANON: tcflag_t = 2;
+pub const TCSANOW: c_int = 0;
+
+/* -------------------------------------------------------------------------- */
+/*                                   Struct                                   */
+/* -------------------------------------------------------------------------- */
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Termios {
+    pub c_iflag: tcflag_t,  // Input mode flags
+    pub c_oflag: tcflag_t,  // Output mode flags
+    pub c_cflag: tcflag_t,  // Control mode flags
+    pub c_lflag: tcflag_t,  // Local mode flags
+    pub c_line: i8,         // Line discipline
+    pub c_cc: [cc_t; NCCS], // Control characters
+    pub c_ispeed: speed_t,  // Input speed
+    pub c_ospeed: speed_t,  // Output speed
+}
 
 #[repr(C)]
-pub struct passwd {
+pub struct Passwd {
     pub pw_name: *mut c_char,
     pw_passwd: *mut c_char,
     pub pw_uid: uid_t,
@@ -74,6 +99,10 @@ pub struct passwd {
     pw_shell: *mut c_char,
 }
 
+/* -------------------------------------------------------------------------- */
+/*                            Safe Function Wrapper                           */
+/* -------------------------------------------------------------------------- */
+/// return a Termios set with the correct value or an error
 pub fn get_terminal_attributes(fd: i32) -> Result<Termios, std::io::Error> {
     let mut termios = Termios {
         c_iflag: 0,
@@ -96,22 +125,20 @@ pub fn get_terminal_attributes(fd: i32) -> Result<Termios, std::io::Error> {
     Ok(termios)
 }
 
-use std::io;
-use std::os::unix::io::AsRawFd;
-
-pub fn disable_raw_mode(orig_termios: Termios) {
+/// restore the old termios setting
+pub fn disable_raw_mode(orig_termios: Termios) -> Result<(), io::Error> {
     let fd = io::stdin().as_raw_fd(); // Get the file descriptor for stdin
-    unsafe {
-        // Restore original terminal settings
-        if raw::tcsetattr(fd, TCSANOW, &orig_termios) == -1 {
-            eprintln!(
-                "Error restoring terminal settings: {}",
-                std::io::Error::last_os_error()
-            );
-        }
+    let result = unsafe { raw::tcsetattr(fd, TCSANOW, &orig_termios) };
+
+    // Restore original terminal settings
+    if result == -1 {
+        return Err(std::io::Error::last_os_error());
     }
+
+    Ok(())
 }
 
+/// set some attribute on the termios given as argument
 pub fn set_terminal_attributes(
     fd: i32,
     optional_actions: i32,
@@ -127,6 +154,7 @@ pub fn set_terminal_attributes(
     Ok(())
 }
 
+/// set a new umask returning the old value
 pub fn set_umask(new_umask: mode_t) -> mode_t {
     unsafe { raw::umask(new_umask) }
 }
@@ -143,6 +171,7 @@ pub fn endpwent() {
     }
 }
 
+/// transform a c_string into a String
 pub fn ptr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         return None;
@@ -150,6 +179,7 @@ pub fn ptr_to_string(ptr: *const c_char) -> Option<String> {
     unsafe { CStr::from_ptr(ptr).to_str().ok().map(|s| s.to_owned()) }
 }
 
+/// send a signal to a process
 pub fn kill(pid: pid_t, signal: i32) -> std::io::Result<()> {
     let result = unsafe { raw::kill(pid, signal) };
     if result == 0 {
@@ -159,7 +189,8 @@ pub fn kill(pid: pid_t, signal: i32) -> std::io::Result<()> {
     }
 }
 
-pub fn getpwent() -> Option<passwd> {
+/// return a password struct
+pub fn getpwent() -> Option<Passwd> {
     unsafe {
         let pw_ptr = raw::getpwent();
         if pw_ptr.is_null() {

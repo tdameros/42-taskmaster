@@ -54,7 +54,7 @@ impl Cli {
         }
         let return_line = self.line.clone();
         self.line.clear();
-        tcl::mylibc::disable_raw_mode(origin_termios);
+        tcl::mylibc::disable_raw_mode(origin_termios)?;
         Ok(return_line)
     }
 

@@ -1,11 +1,16 @@
-use std::ffi;
+/* -------------------------------------------------------------------------- */
+/*                                   Import                                   */
+/* -------------------------------------------------------------------------- */
 
-use super::{mode_t, passwd, Termios};
+use super::{mode_t, Passwd, Termios};
 
+/* -------------------------------------------------------------------------- */
+/*                        External Function Declaration                       */
+/* -------------------------------------------------------------------------- */
 // Declare the external C functions
 extern "C" {
     pub(super) fn setpwent();
-    pub(super) fn getpwent() -> *mut passwd;
+    pub(super) fn getpwent() -> *mut Passwd;
     pub(super) fn endpwent();
     pub(super) fn kill(pid: super::pid_t, sig: i32) -> i32;
     pub(super) fn umask(new_mask: mode_t) -> mode_t;

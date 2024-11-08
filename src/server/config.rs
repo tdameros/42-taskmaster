@@ -5,7 +5,6 @@
 use serde::de::{self, Unexpected};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
-use std::ffi::CStr;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 use std::{fs, path::Path};
