@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
 
 // #[tokio::main]
 // async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     let access_token = "o.8bTjZDwKe70TfNqzjMm42HfCcSYkFqA5";
+//     let access_token = std::env::var("API_KEY").unwrap_or_default();
 //     let client = reqwest::Client::new();
 
 //     let res = client.post("https://api.pushbullet.com/v2/pushes")

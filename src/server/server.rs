@@ -2,8 +2,6 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 
-#[cfg(feature = "reqwest")]
-use better_logs::send_notification;
 use client_handler::ClientHandler;
 use logger::{new_shared_logger, SharedLogger};
 use process_manager::{manager::new_shared_process_manager, ProgramManager, SharedProcessManager};
@@ -27,16 +25,6 @@ pub mod process_manager;
 /* -------------------------------------------------------------------------- */
 #[tokio::main]
 async fn main() {
-    #[cfg(feature = "reqwest")]
-    let access_token = "o.8bTjZDwKe70TfNqzjMm42HfCcSYkFqA5".to_string();
-    #[cfg(feature = "reqwest")]
-    let title = "Test Notification".to_string();
-    #[cfg(feature = "reqwest")]
-    let body = "This is a test notification from Rust!".to_string();
-
-    #[cfg(feature = "reqwest")]
-    send_notification(access_token, title, body);
-
     // create a logger instance
     let shared_logger = new_shared_logger().expect("Can't create the logger");
     log_info!(shared_logger, "Starting a new server instance");
