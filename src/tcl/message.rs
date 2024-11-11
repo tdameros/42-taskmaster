@@ -13,7 +13,7 @@ use crate::{error::TaskmasterError, MAX_MESSAGE_SIZE};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -173,7 +173,7 @@ impl Display for ProcessStatus {
             "Started:",
             self.start_time
                 .map_or("Not yet".to_string(), |time| format_duration(
-                    time.duration_since(UNIX_EPOCH).unwrap()
+                    SystemTime::now().duration_since(time).unwrap()
                 ))
         )?;
         writeln!(
@@ -182,7 +182,7 @@ impl Display for ProcessStatus {
             "Stopping since:",
             self.shutdown_time
                 .map_or("Not in progress".to_string(), |time| format_duration(
-                    time.duration_since(UNIX_EPOCH).unwrap()
+                    SystemTime::now().duration_since(time).unwrap()
                 ))
         )?;
         writeln!(f, "│ {:20} {}", "Restarts:", self.number_of_restart)?;

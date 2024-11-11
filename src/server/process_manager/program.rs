@@ -32,7 +32,7 @@ impl Program {
     /// update self state
     pub(super) fn monitor(&mut self, logger: &Logger) {
         self.process_vec.iter_mut().for_each(|process| {
-            if let Err(e) = process.react_to_program_state() {
+            if let Err(e) = process.react_to_program_state(&self.name) {
                 log_error!(logger, "{e}");
             }
         });

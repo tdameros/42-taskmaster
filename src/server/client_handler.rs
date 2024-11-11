@@ -32,7 +32,6 @@ impl ClientHandler {
         loop {
             match receive::<Request>(&mut socket).await {
                 Ok(message) => {
-                    println!("{:#?}", shared_process_manager.read().unwrap());
                     let response = match message {
                         R::Status => {
                             log_info!(shared_logger, "Status Request gotten");
