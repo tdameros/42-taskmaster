@@ -19,7 +19,7 @@
       ANSWER: 42
   vogsphere:
     cmd: "/bin/ls"
-    numprocs: 2
+    numprocs: 1
     umask: 77
     workingdir: /tmp
     autostart: true

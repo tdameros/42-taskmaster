@@ -11,7 +11,11 @@ use std::thread;
 pub fn send_http_message(address: String, message: String) {
     thread::spawn(move || {
         // Connect to the server
-        let mut stream = TcpStream::connect(address.to_owned()).unwrap();
+        let result = TcpStream::connect(address.to_owned());
+        if result.is_err() {
+            return;
+        }
+        let mut stream = result.unwrap();
 
         // Prepare the JSON payload
         let body = format!("{{\"message\":\"{}\"}}", message);

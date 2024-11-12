@@ -7,7 +7,8 @@ use config::SharedConfig;
 use logger::{new_shared_logger, SharedLogger};
 use process_manager::{manager::new_shared_process_manager, ProgramManager, SharedProcessManager};
 use std::{
-    thread::{self, sleep, JoinHandle}, time::Duration
+    thread::{self, sleep, JoinHandle},
+    time::Duration,
 };
 use tcl::mylibc::signal;
 use tokio::net::TcpListener;
@@ -132,9 +133,7 @@ fn monitor_sighup(
 }
 
 pub extern "C" fn sighup_handler(_signum: std::ffi::c_int) {
-    println!("RECEIVED a SIGHUP");
     unsafe {
         RECEIVED_SIGHUP = true;
     }
-    println!("RECEIVED a SIGHUP");
 }
