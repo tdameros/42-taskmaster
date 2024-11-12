@@ -11,11 +11,23 @@ path = "src/server/server.rs"
 name = "client"
 path = "src/client/client.rs"
 
+[[bin]]
+name = "logs"
+path = "src/logs/main.rs"
+required-features = ["better_log"]
+
 [lib]
 name = "tcl"
 path = "src/tcl/lib.rs"
 
+[features]
+better_log = ["actix-web"]
+reqwest = ["dep:reqwest", "serde_json"]
+
 [dependencies]
-serde = { version = "1.0.210", features = ["derive"] } # used to tell other crate how to transform a struct
-serde_yaml = "0.9.34" # used to transform a struct into a yaml format
+serde = { version = "1.0.210", features = ["derive"] } # used to tell other crate how to transform a struct (client/server bonus)
+serde_yaml = "0.9.34" # used to transform a struct into a yaml format (used in the client/server architecture + the parsing of the config)
 tokio = { version = "1.40.0", features = ["full"] } # used to create the client/server architecture
+actix-web = {version = "4.9.0", optional = true} # used for the better logging server that receive the message (not part of the subject)
+serde_json = {version = "1.0", optional = true}
+reqwest = { version = "0.11", features = ["json"], optional = true}

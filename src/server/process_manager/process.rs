@@ -253,12 +253,15 @@ impl Process {
     /// - `Err(ProcessError::CouldNotSpawnChild)` if the child was not able to be spawned
     /// - `Err(ProcessError::NoChild)` if there were no child process
     /// - `Err(ProcessError::CantKillProcess)` if we couldn't kill the process
-    pub(super) fn react_to_program_state(&mut self) -> Result<(), ProcessError> {
+    pub(super) fn react_to_program_state(
+        &mut self,
+        program_name: &str,
+    ) -> Result<(), ProcessError> {
         self.update_state()?;
         use ProcessState as PS;
         match self.state {
             PS::NeverStartedYet => self.react_never_started_yet(),
-            PS::Backoff => self.react_backoff(),
+            PS::Backoff => self.react_backoff(program_name),
             PS::Stopping => self.react_stopping(),
             PS::ExitedExpectedly => self.react_expected_exit(),
             PS::ExitedUnExpectedly => self.react_unexpected_exit(),
