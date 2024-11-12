@@ -5,8 +5,9 @@
 use client_handler::ClientHandler;
 use logger::{new_shared_logger, SharedLogger};
 use process_manager::{manager::new_shared_process_manager, ProgramManager, SharedProcessManager};
+use tcl::mylibc::signal;
 use std::{
-    thread::{sleep, JoinHandle},
+    thread::{self, sleep, JoinHandle},
     time::Duration,
 };
 use tokio::net::TcpListener;
@@ -20,10 +21,18 @@ mod logger;
 pub mod process_manager;
 
 /* -------------------------------------------------------------------------- */
+/*                               Global Variable                              */
+/* -------------------------------------------------------------------------- */
+static mut RECEIVED_SIGHUP: bool = false;
+
+/* -------------------------------------------------------------------------- */
 /*                                    Main                                    */
 /* -------------------------------------------------------------------------- */
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
+    signal(tcl::mylibc::SIGHUP, sighup_handler);
+    monitor_sighup();
+
     // create a logger instance
     let shared_logger = new_shared_logger().expect("Can't create the logger");
     log_info!(shared_logger, "Starting a new server instance");
@@ -68,6 +77,9 @@ async fn main() {
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                             Monitoring Function                            */
+/* -------------------------------------------------------------------------- */
 async fn start_monitor(
     shared_process_manager: SharedProcessManager,
     shared_logger: SharedLogger,
@@ -92,5 +104,18 @@ async fn start_monitor(
                 sleep(Duration::from_secs(5));
             }
         }
+    }
+}
+
+fn monitor_sighup() {
+    thread::spawn(|| {
+
+    });
+}
+
+pub extern "C" fn sighup_handler(_signum: std::ffi::c_int) {
+    println!("RECEIVED a SIGHUP");
+    unsafe {
+        RECEIVED_SIGHUP = true;
     }
 }

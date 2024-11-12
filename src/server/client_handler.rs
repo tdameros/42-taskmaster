@@ -67,6 +67,7 @@ impl ClientHandler {
                             match Config::load() {
                                 Ok(config) => {
                                     *shared_config.write().unwrap() = config;
+                                    tcl::mylibc::kill(tcl::mylibc::getppid(), tcl::mylibc::SIGHUP).expect("should not be possible");
                                     shared_process_manager.write().unwrap().reload_config(
                                         &shared_config.read().unwrap(),
                                         &shared_logger,

@@ -156,7 +156,7 @@ impl Process {
             child.id() as tcl::mylibc::pid_t,
             signal_number as std::ffi::c_int,
         )
-        .map_err(|e| ProcessError::Signal(e))?;
+        .map_err(ProcessError::Signal)?;
 
         self.time_since_shutdown = Some(SystemTime::now());
         self.started_since = None;

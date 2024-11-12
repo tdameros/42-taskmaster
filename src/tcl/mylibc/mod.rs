@@ -30,6 +30,8 @@ pub type uid_t = u32;
 pub type gid_t = u32;
 #[allow(non_camel_case_types)]
 pub type pid_t = i32;
+#[allow(non_camel_case_types)]
+pub type sighandler_t = extern "C" fn(c_int) -> ();
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
@@ -97,6 +99,38 @@ pub struct Passwd {
     pw_gecos: *mut c_char,
     pw_dir: *mut c_char,
     pw_shell: *mut c_char,
+}
+
+#[repr(C)]
+#[allow(non_camel_case_types)]
+#[derive(Debug, Default)]
+pub struct sigset_t {
+    pub val: [u64; 16],
+}
+
+/// represent a way to use the signal present in a sigset_t
+/// for more info see the [`pthread_sigmask`] documentation.
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub enum How {
+    /// The set of blocked signals is the union of the current set
+    /// and the set argument.
+    SIG_BLOCK = 0,
+    /// The signals in set are removed from the current set of
+    /// blocked signals. It is permissible to attempt to unblock
+    /// a signal which is not blocked.
+    SIG_UNBLOCK = 1,
+    /// The set of blocked signals is set to the argument set.
+    SIG_SETMASK = 2,
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Struct implementation                           */
+/* -------------------------------------------------------------------------- */
+impl sigset_t {
+    pub fn add(&mut self, signum: c_int) -> Result<(), io::Error> {
+        sigaddset(self, signum)
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -171,6 +205,7 @@ pub fn endpwent() {
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 /// transform a c_string into a String
 pub fn ptr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
@@ -198,5 +233,46 @@ pub fn getpwent() -> Option<Passwd> {
         } else {
             Some(std::ptr::read(pw_ptr))
         }
+    }
+}
+
+/// return the parent process id, can never fail
+pub fn getppid() -> pid_t {
+    unsafe { raw::getppid() }
+}
+
+/// used to send a signal to a given process
+pub fn signal(signum: c_int, handler: sighandler_t) {
+    unsafe {
+        raw::signal(signum, handler);
+    }
+}
+
+/// used to add a signal to a given sigset_t
+pub fn sigaddset(set: &mut sigset_t, signum: c_int) -> Result<(), std::io::Error> {
+    let result = unsafe { raw::sigaddset(set, signum) };
+    match result {
+        0 => Ok(()),
+        _ => Err(std::io::Error::last_os_error()),
+    }
+}
+
+/// use override the default behavior when receiving a signal
+/// # Arguments
+/// - `how` define the behavior of the function regarding the other arguments
+/// - `set` the set used according to the how argument
+/// - ``
+pub fn pthread_sigmask(
+    how: How,
+    set: &sigset_t,
+    oldset: Option<&mut sigset_t>,
+) -> Result<(), std::io::Error> {
+    let result = match oldset {
+        Some(oldset) => unsafe { raw::pthread_sigmask(how as c_int, set, oldset) },
+        None => unsafe { raw::pthread_sigmask(how as c_int, set, std::ptr::null_mut()) },
+    };
+    match result {
+        0 => Ok(()),
+        _ => Err(std::io::Error::last_os_error()),
     }
 }

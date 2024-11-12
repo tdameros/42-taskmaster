@@ -65,7 +65,7 @@ impl Cli {
 
         let orig_termios = termios;
         // Disable canonical mode and echo
-        termios.c_lflag &= !((ICANON | ECHO) as u32);
+        termios.c_lflag &= !(ICANON | ECHO);
         // Apply changes immediately
         tcl::mylibc::set_terminal_attributes(fd, TCSANOW, &termios)?;
 

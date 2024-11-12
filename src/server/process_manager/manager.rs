@@ -14,7 +14,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tcl::message::Response;
+use tcl::{message::Response, mylibc::{sigset_t, How, SIGHUP}};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -108,13 +108,18 @@ impl ProgramManager {
         shared_logger: SharedLogger,
         refresh_period: Duration,
     ) -> Result<JoinHandle<()>, std::io::Error> {
-        thread::Builder::new().spawn(move || loop {
+        thread::Builder::new().spawn(move || {
+            let how = How::SIG_BLOCK;
+            let mut set = sigset_t::default();
+            set.add(SIGHUP).unwrap();
+            tcl::mylibc::pthread_sigmask(how, &set, None).unwrap();
+            loop {
             shared_process_manager
                 .write()
                 .unwrap()
                 .monitor_once(&shared_logger);
             thread::sleep(refresh_period);
-        })
+        }})
     }
 
     /// Use for user manual starting of a program's process
