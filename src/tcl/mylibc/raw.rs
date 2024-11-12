@@ -20,7 +20,7 @@ extern "C" {
         optional_actions: super::c_int,
         termios_p: *const Termios,
     ) -> super::c_int;
-    pub(super) fn getppid() -> super::pid_t;
+    pub(super) fn getpid() -> super::pid_t;
     pub(super) fn signal(signum: super::c_int, handler: super::sighandler_t);
     pub(super) fn pthread_sigmask(
         how: super::c_int,
@@ -29,4 +29,3 @@ extern "C" {
     ) -> super::c_int;
     pub(super) fn sigaddset(set: *mut super::sigset_t, signumL: super::c_int) -> super::c_int;
 }
-

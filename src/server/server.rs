@@ -3,13 +3,13 @@
 /* -------------------------------------------------------------------------- */
 
 use client_handler::ClientHandler;
+use config::SharedConfig;
 use logger::{new_shared_logger, SharedLogger};
 use process_manager::{manager::new_shared_process_manager, ProgramManager, SharedProcessManager};
-use tcl::mylibc::signal;
 use std::{
-    thread::{self, sleep, JoinHandle},
-    time::Duration,
+    thread::{self, sleep, JoinHandle}, time::Duration
 };
+use tcl::mylibc::signal;
 use tokio::net::TcpListener;
 
 /* -------------------------------------------------------------------------- */
@@ -31,7 +31,6 @@ static mut RECEIVED_SIGHUP: bool = false;
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     signal(tcl::mylibc::SIGHUP, sighup_handler);
-    monitor_sighup();
 
     // create a logger instance
     let shared_logger = new_shared_logger().expect("Can't create the logger");
@@ -46,6 +45,12 @@ async fn main() {
     let shared_process_manager = new_shared_process_manager(&shared_config.read().unwrap());
     log_info!(shared_logger, "Process Manager created");
     log_debug!(shared_logger, "{shared_process_manager:?}");
+
+    monitor_sighup(
+        shared_process_manager.clone(),
+        shared_logger.clone(),
+        shared_config.clone(),
+    );
 
     // start the listener
     log_info!(shared_logger, "Starting Taskmaster Daemon");
@@ -107,9 +112,21 @@ async fn start_monitor(
     }
 }
 
-fn monitor_sighup() {
-    thread::spawn(|| {
-
+fn monitor_sighup(
+    shared_process_manager: SharedProcessManager,
+    shared_logger: SharedLogger,
+    shared_config: SharedConfig,
+) {
+    thread::spawn(move || loop {
+        unsafe {
+            if RECEIVED_SIGHUP {
+                shared_process_manager
+                    .write()
+                    .unwrap()
+                    .reload_config(&shared_config.read().unwrap(), &shared_logger);
+            }
+        }
+        sleep(Duration::from_secs(1));
     });
 }
 
@@ -118,4 +135,5 @@ pub extern "C" fn sighup_handler(_signum: std::ffi::c_int) {
     unsafe {
         RECEIVED_SIGHUP = true;
     }
+    println!("RECEIVED a SIGHUP");
 }

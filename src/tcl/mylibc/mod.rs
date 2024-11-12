@@ -237,8 +237,8 @@ pub fn getpwent() -> Option<Passwd> {
 }
 
 /// return the parent process id, can never fail
-pub fn getppid() -> pid_t {
-    unsafe { raw::getppid() }
+pub fn getpid() -> pid_t {
+    unsafe { raw::getpid() }
 }
 
 /// used to send a signal to a given process

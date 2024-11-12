@@ -14,7 +14,10 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tcl::{message::Response, mylibc::{sigset_t, How, SIGHUP}};
+use tcl::{
+    message::Response,
+    mylibc::{sigset_t, How, SIGHUP},
+};
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -114,12 +117,13 @@ impl ProgramManager {
             set.add(SIGHUP).unwrap();
             tcl::mylibc::pthread_sigmask(how, &set, None).unwrap();
             loop {
-            shared_process_manager
-                .write()
-                .unwrap()
-                .monitor_once(&shared_logger);
-            thread::sleep(refresh_period);
-        }})
+                shared_process_manager
+                    .write()
+                    .unwrap()
+                    .monitor_once(&shared_logger);
+                thread::sleep(refresh_period);
+            }
+        })
     }
 
     /// Use for user manual starting of a program's process
