@@ -42,6 +42,7 @@ pub enum Request {
     Stop(String),
     Restart(String),
     Attach(String),
+    Detach,
     Reload,
 }
 

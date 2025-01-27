@@ -4,6 +4,7 @@
 
 use super::{Process, ProcessError, ProcessState};
 use crate::config::{ProgramConfig, Signal};
+use crate::ring_buffer::RingBuffer;
 use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
@@ -155,18 +156,23 @@ impl Process {
     /// - The signal sending operation fails (`ProcessError::SignalError`)
     pub(super) fn send_signal(&mut self, signal: &Signal) -> Result<(), ProcessError> {
         let child = self.child.as_ref().ok_or(ProcessError::NoChild)?;
-        let child_id = child.id().unwrap();
-        let signal_number = Self::signal_to_libc(signal);
-        let result = unsafe { libc::kill(child_id as libc::pid_t, signal_number as libc::c_int) };
+        let child_id = child.id();
+        match child_id {
+            Some(id) => {
+                let signal_number = Self::signal_to_libc(signal);
+                let result = unsafe { libc::kill(id as libc::pid_t, signal_number as libc::c_int) };
 
-        if result == -1 {
-            return Err(ProcessError::Signal(std::io::Error::last_os_error()));
+                if result == -1 {
+                    return Err(ProcessError::Signal(std::io::Error::last_os_error()));
+                }
+
+                self.time_since_shutdown = Some(SystemTime::now());
+                self.started_since = None;
+                self.state = ProcessState::Stopping;
+                Ok(())
+            }
+            None => Err(ProcessError::NoChild),
         }
-
-        self.time_since_shutdown = Some(SystemTime::now());
-        self.started_since = None;
-        self.state = ProcessState::Stopping;
-        Ok(())
     }
 
     /// Convert our Signal enum to libc signal constants
@@ -328,30 +334,37 @@ impl Process {
                     .open(stdout)
                     .expect("could not open file")
             });
-            tokio::spawn(Self::handle_stdout(stdout, sender, file));
+            let history = self.stdout_history.clone();
+            tokio::spawn(Self::handle_stdout(stdout, sender, history, file));
         }
     }
 
     async fn handle_stdout(
         stdout: ChildStdout,
         sender: Arc<RwLock<broadcast::Sender<String>>>,
+        history: Arc<RwLock<RingBuffer<String>>>,
         file: Option<fs::File>,
-    ) {
+    ) -> Result<(), std::io::Error> {
         let mut reader = BufReader::new(stdout);
         let mut buffer = [0; 1];
         let mut line: String = String::new();
 
-        while reader.read(&mut buffer).await.unwrap() > 0 {
-            line.push(char::from_u32(buffer[0] as u32).unwrap());
-            if let Some(mut file) = file.as_ref() {
-                file.write_all(&buffer).unwrap();
-            }
-            if buffer[0] == b'\n' {
-                let _ = sender.write().await.send(line.clone());
-                line.clear();
+        while reader.read(&mut buffer).await? > 0 {
+            let char = char::from_u32(buffer[0] as u32);
+            if let Some(char) = char {
+                line.push(char);
+                if let Some(mut file) = file.as_ref() {
+                    let _ = file.write_all(&buffer);
+                }
+                if buffer[0] == b'\n' {
+                    let _ = sender.write().await.send(line.clone());
+                    history.write().await.push(line.clone());
+                    line.clear();
+                }
             }
         }
         println!("Process ended");
+        Ok(())
     }
 
     /// Set new umask and return the previous value
@@ -378,6 +391,10 @@ impl Process {
 
     pub async fn subscribe(&self) -> broadcast::Receiver<String> {
         self.sender.write().await.subscribe()
+    }
+
+    pub async fn get_stdout_history(&self) -> RingBuffer<String> {
+        self.stdout_history.read().await.clone()
     }
 
     /// this function simply set the child to None
@@ -410,6 +427,7 @@ impl Default for Process {
             state: Default::default(),
             config: Default::default(),
             number_of_restart: Default::default(),
+            stdout_history: Arc::new(RwLock::new(RingBuffer::new(25))),
         }
     }
 }

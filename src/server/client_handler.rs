@@ -1,6 +1,7 @@
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
+use crate::ring_buffer::RingBuffer;
 use crate::{
     config::{Config, SharedConfig},
     log_error, log_info,
@@ -8,6 +9,7 @@ use crate::{
     process_manager::SharedProcessManager,
 };
 use std::sync::Arc;
+use libc::printf;
 use tcl::message::{
     receive_with_shared_tcp_stream, send_with_shared_tcp_stream, Request, Response,
 };
@@ -15,9 +17,8 @@ use tokio::{
     io::{split, WriteHalf},
     net::TcpStream,
     sync::Mutex,
-    time::{sleep, Duration},
 };
-
+use tokio::task::JoinHandle;
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
 /* -------------------------------------------------------------------------- */
@@ -38,6 +39,8 @@ impl ClientHandler {
         let (reader, writer) = split(socket);
         let shared_writer = Arc::new(Mutex::new(writer));
         let shared_reader = Arc::new(Mutex::new(reader));
+        let mut is_attach = false;
+        let mut task: Option<JoinHandle<()>> = None;
         loop {
             match receive_with_shared_tcp_stream::<Request>(shared_reader.clone()).await {
                 Ok(message) => {
@@ -89,13 +92,33 @@ impl ClientHandler {
                             }
                         }
                         R::Attach(name) => {
-                            attach(
+                            if is_attach {
+                                log_info!(shared_logger, "Already attached");
+                                return;
+                            }
+                        let _task = attach(
                                 name,
                                 shared_process_manager.clone(),
                                 shared_writer.clone(),
                                 shared_logger.clone(),
                             )
-                            .await
+                            .await;
+                            match _task {
+                                Some(_task) => {
+                                    task = Some(_task);
+                                    Response::Success("Attach Successful".to_owned())
+                                }
+                                None => Response::Error("Program not found".to_owned()),
+                            }
+                        }
+                        R::Detach => {
+                            is_attach = false;
+                            if let Some(ref my_task) = task {
+                                my_task.abort();
+                                println!("Task Aborted");
+                                println!("Task Status: {:?}", my_task.is_finished());
+                            }
+                            Response::Success("Detach Successful".to_owned())
                         }
                     };
                     if let Err(error) =
@@ -123,23 +146,54 @@ async fn attach(
     shared_process_manager: SharedProcessManager,
     shared_writer: Arc<Mutex<WriteHalf<TcpStream>>>,
     shared_logger: SharedLogger,
-) -> Response {
+) -> Option<JoinHandle<()>> {
     let broadcast = shared_process_manager.write().await.subscribe(&name).await;
-    if let Some(mut broadcast) = broadcast {
-        tokio::spawn(async move {
-            loop {
-                let e = broadcast.recv().await.unwrap();
-                let response = Response::RawStream(e);
+    let history = shared_process_manager
+        .write()
+        .await
+        .get_history(&name)
+        .await;
+    if let (Some(broadcast), Some(history)) = (broadcast, history) {
+        Some(tokio::spawn(transfer_stdout(
+            broadcast,
+            history,
+            shared_writer,
+            shared_logger,
+        )))
+        // (Response::Success("Attach Successful".to_owned()), Some(task))
+    } else {
+        None
+            // (Response::Error("Program not found".to_owned()), None)
+    }
+}
+
+async fn transfer_stdout(
+    mut broadcast: tokio::sync::broadcast::Receiver<String>,
+    history: RingBuffer<String>,
+    shared_writer: Arc<Mutex<WriteHalf<TcpStream>>>,
+    shared_logger: SharedLogger,
+) {
+    for line in history.iter() {
+        let response = Response::RawStream(line.clone());
+        if let Err(error) = send_with_shared_tcp_stream(shared_writer.clone(), &response).await {
+            log_error!(shared_logger, "{}", error);
+        }
+    }
+    loop {
+        let message = broadcast.recv().await;
+        match message {
+            Ok(message) => {
+                let response = Response::RawStream(message);
                 if let Err(error) =
                     send_with_shared_tcp_stream(shared_writer.clone(), &response).await
                 {
                     log_error!(shared_logger, "{}", error);
                 }
-                sleep(Duration::from_secs(1)).await;
             }
-        });
-        Response::Success("Attach Successful".to_owned())
-    } else {
-        Response::Error("Program not found".to_owned())
+            Err(error) => {
+                log_error!(shared_logger, "{}", error);
+                break;
+            }
+        }
     }
 }

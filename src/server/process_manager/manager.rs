@@ -3,6 +3,7 @@
 /* -------------------------------------------------------------------------- */
 
 use super::{Program, ProgramError, ProgramManager, SharedProcessManager};
+use crate::ring_buffer::RingBuffer;
 use crate::{
     config::Config,
     log_error,
@@ -16,7 +17,6 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
@@ -221,6 +221,13 @@ impl ProgramManager {
     pub async fn subscribe(&mut self, program_name: &str) -> Option<broadcast::Receiver<String>> {
         match self.programs.get_mut(program_name) {
             Some(program) => Some(program.process_vec[0].subscribe().await),
+            None => None,
+        }
+    }
+
+    pub async fn get_history(&mut self, program_name: &str) -> Option<RingBuffer<String>> {
+        match self.programs.get_mut(program_name) {
+            Some(program) => Some(program.process_vec[0].get_stdout_history().await),
             None => None,
         }
     }

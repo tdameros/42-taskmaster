@@ -2,6 +2,7 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 use crate::config::ProgramConfig;
+use crate::ring_buffer::RingBuffer;
 use std::sync::Arc;
 use tokio::{
     process::Child,
@@ -45,6 +46,9 @@ struct Process {
     number_of_restart: u32,
 
     sender: Arc<RwLock<broadcast::Sender<String>>>,
+
+    // stdout_history: Arc<RwLock<Vec<String>>>,
+    stdout_history: Arc<RwLock<RingBuffer<String>>>,
 }
 
 /// Represent the state of a given process
