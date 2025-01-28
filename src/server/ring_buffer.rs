@@ -22,6 +22,11 @@ impl<T> RingBuffer<T> {
         }
         self.buffer.push_back(value);
     }
+    
+    /// Delete all elements in the buffer
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
 
     /// Return a reference to all elements in order (FIFO)
     pub fn iter(&self) -> impl Iterator<Item = &T> {

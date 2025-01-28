@@ -305,6 +305,7 @@ impl Process {
             command.uid(user.uid);
             command.gid(user.gid);
         }
+        self.stdout_history.write().await.clear();
         self.set_command_redirection(&mut command)
             .map_err(ProcessError::FailedToCreateRedirection)?;
 
@@ -363,7 +364,6 @@ impl Process {
                 }
             }
         }
-        println!("Process ended");
         Ok(())
     }
 
