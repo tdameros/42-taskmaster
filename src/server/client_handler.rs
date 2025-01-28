@@ -56,7 +56,7 @@ impl ClientHandler {
                     }
                 }
                 Err(error) => {
-                    if error.client_disconnected() {
+                    if error.connection_lost() {
                         log_info!(client.shared_logger, "Client Disconnected");
                         return;
                     } else {

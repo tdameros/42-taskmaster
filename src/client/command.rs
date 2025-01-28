@@ -43,7 +43,11 @@ impl Command {
                         Ok(result)
                     }
                     Err(error) => {
-                        println!("{error}");
+                        if error.connection_lost() {
+                            eprintln!("Connection lost with server");
+                            std::process::exit(1);
+                        }
+                        eprintln!("{error}");
                         Err(error)
                     }
                 }
