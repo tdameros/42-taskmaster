@@ -328,12 +328,12 @@ impl Process {
         if let Some(child) = self.child.as_mut() {
             let sender = self.sender.clone();
             let stdout = child.stdout.take().expect("stdout is not set");
-            let file = self.config.stdout_redirection.as_ref().map(|stdout| {
+            let file = self.config.stdout_redirection.as_ref().and_then(|stdout| {
                 fs::OpenOptions::new()
                     .append(true)
                     .create(true)
                     .open(stdout)
-                    .expect("could not open file")
+                    .ok()
             });
             let history = self.stdout_history.clone();
             tokio::spawn(Self::handle_stdout(stdout, sender, history, file));
