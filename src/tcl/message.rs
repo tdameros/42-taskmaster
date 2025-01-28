@@ -196,11 +196,7 @@ pub async fn receive_with_shared_tcp_stream<T: for<'a> Deserialize<'a>>(
 /*                           Display Implementation                           */
 /* -------------------------------------------------------------------------- */
 fn format_duration(duration: Duration) -> String {
-    let secs = duration.as_secs();
-    let hours = secs / 3600;
-    let minutes = (secs % 3600) / 60;
-    let seconds = secs % 60;
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+    format!("{:?} (Unix Timestamp)", duration.as_secs())
 }
 
 impl Display for ProcessState {
