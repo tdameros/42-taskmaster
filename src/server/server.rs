@@ -1,11 +1,12 @@
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
+use crate::config::{Config, SharedConfig};
 use client_handler::ClientHandler;
 use logger::{new_shared_logger, SharedLogger};
 use process_manager::{manager::new_shared_process_manager, ProgramManager, SharedProcessManager};
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::{net::TcpListener, task::JoinHandle, time::Duration};
-
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
@@ -46,6 +47,13 @@ async fn main() {
 
     log_info!(shared_logger, "Here");
 
+    start_sighup_monitor(
+        shared_process_manager.clone(),
+        shared_config.clone(),
+        shared_logger.clone(),
+    )
+    .await;
+
     // handle the client connection
     loop {
         log_info!(shared_logger, "Waiting for Client To arrive");
@@ -82,4 +90,31 @@ async fn start_monitor(
         Duration::from_secs(1),
     )
     .await
+}
+
+async fn start_sighup_monitor(
+    shared_process_manager: SharedProcessManager,
+    shared_config: SharedConfig,
+    shared_logger: SharedLogger,
+) {
+    let mut signal = signal(SignalKind::hangup()).expect("Failed to bind SIGHUP signal");
+    tokio::spawn(async move {
+        loop {
+            signal.recv().await;
+            match Config::load() {
+                Ok(config) => {
+                    *shared_config.clone().write().await = config;
+                    shared_process_manager
+                        .clone()
+                        .write()
+                        .await
+                        .reload_config(&(*shared_config.read().await), &shared_logger)
+                        .await;
+                }
+                Err(error) => {
+                    eprintln!("Failed to reload config: {error}")
+                }
+            };
+        }
+    });
 }

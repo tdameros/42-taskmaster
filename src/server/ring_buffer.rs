@@ -22,7 +22,7 @@ impl<T> RingBuffer<T> {
         }
         self.buffer.push_back(value);
     }
-    
+
     /// Delete all elements in the buffer
     pub fn clear(&mut self) {
         self.buffer.clear();
