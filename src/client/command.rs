@@ -24,26 +24,29 @@ pub enum Command {
 /* -------------------------------------------------------------------------- */
 impl Command {
     /// This Function will match the command and execute it properly
-    pub async fn execute(&self, stream: &mut TcpStream) -> Result<(), TaskmasterError> {
+    pub async fn execute(&self, stream: &mut TcpStream) -> Result<Response, TaskmasterError> {
         match self {
             Command::Exit => {
                 Command::exit();
-                Ok(())
+                Ok(Response::Success(String::from("Success exit")))
             }
             Command::Help => {
                 Command::help();
-                Ok(())
+                Ok(Response::Success(String::from("Success help")))
             }
             Command::Request(request) => {
                 Command::forward_to_server(request, stream).await?;
                 let response: Result<Response, TaskmasterError> = receive(stream).await;
                 match response {
-                    Ok(result) => print!("{result}"),
+                    Ok(result) => {
+                        print!("{result}");
+                        Ok(result)
+                    }
                     Err(error) => {
                         println!("{error}");
+                        Err(error)
                     }
                 }
-                Ok(())
             }
         }
     }

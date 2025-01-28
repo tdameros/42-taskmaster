@@ -12,6 +12,7 @@ use tcl::error::TaskmasterError;
 /* -------------------------------------------------------------------------- */
 const ESCAPE_KEY: u8 = 0x1B;
 const BACKSPACE: u8 = 0x7F;
+const END_OF_FILE: u8 = 0x04;
 const CLEAR_LINE: &str = "\x1B[2K";
 const CLEAR_CHAR: &str = "\x1B[1D \x1B[1D";
 const RESET_CURSOR: &str = "\x1B[0G";
@@ -90,7 +91,11 @@ impl Cli {
         let mut buffer = vec![0; 3];
         stdin.lock().read_exact(&mut buffer[..1])?;
 
-        if buffer[0] == ESCAPE_KEY {
+        if buffer[0] == END_OF_FILE {
+            return Err(TaskmasterError::IoError(
+                io::ErrorKind::UnexpectedEof.into(),
+            ));
+        } else if buffer[0] == ESCAPE_KEY {
             stdin.lock().read_exact(&mut buffer[1..3])?;
         } else {
             buffer.truncate(1);
