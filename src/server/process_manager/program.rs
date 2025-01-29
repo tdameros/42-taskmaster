@@ -8,8 +8,9 @@ use crate::{
     log_error,
     logger::Logger,
 };
-use std::{error::Error, fmt::Display, thread::sleep, time::Duration};
+use std::{error::Error, fmt::Display, time::Duration};
 use tcl::message::Response;
+use tokio::time::sleep;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -40,9 +41,7 @@ impl Program {
 
     /// in the event of a config reload this will tell if the given program should be kept as is
     pub(super) fn should_be_kept(&self, config: &Config) -> bool {
-        config
-            .get(&self.name)
-            .map_or(false, |cfg| cfg == &self.config)
+        config.get(&self.name) == Some(&self.config)
     }
 
     pub(super) async fn shutdown_all_process(&mut self, logger: &Logger) {
@@ -138,7 +137,7 @@ impl Program {
     /// This function includes a 1-second delay between stop and start operations.
     pub(super) async fn restart(&mut self, logger: &Logger) -> Result<(), OrderError> {
         let stop_results = self.stop().await;
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(1)).await;
         self.monitor(logger).await;
         let start_results = self.start().await;
 

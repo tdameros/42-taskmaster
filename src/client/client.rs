@@ -4,12 +4,13 @@
 
 use cli::Cli;
 use command::Command;
-use std::{thread::sleep, time::Duration};
+use std::time::Duration;
 use tcl::message::{receive, send, Request, Response};
 use tcl::SOCKET_ADDRESS;
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::signal::unix::{signal, SignalKind};
+use tokio::time::sleep;
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
 /* -------------------------------------------------------------------------- */
@@ -32,7 +33,7 @@ async fn main() {
             }
             Err(e) => {
                 eprintln!("can't connect: {e}");
-                sleep(Duration::from_secs(2));
+                sleep(Duration::from_secs(2)).await;
             }
         }
     };
