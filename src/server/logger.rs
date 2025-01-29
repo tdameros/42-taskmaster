@@ -5,9 +5,10 @@
 use std::{
     fs::{File, OpenOptions},
     io::Write,
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::RwLock;
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constant                                  */
@@ -40,7 +41,7 @@ impl Logger {
     }
 
     /// write the message to the logging file
-    pub(super) fn log(&self, level: &str, message: &str) -> Result<(), std::io::Error> {
+    pub(super) async fn log(&self, level: &str, message: &str) -> Result<(), std::io::Error> {
         // get the time since unix epoch TODO! reworked for better formatting
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -51,7 +52,7 @@ impl Logger {
         let log_entry = format!("[{}] {} - {}\n", timestamp, level, message);
 
         // write the log to the file
-        let mut file = self.file.write().unwrap();
+        let mut file = self.file.write().await;
         file.write_all(log_entry.as_bytes())?;
         file.flush()?;
 
@@ -69,20 +70,20 @@ pub(crate) fn new_shared_logger() -> Result<SharedLogger, std::io::Error> {
 #[macro_export]
 macro_rules! log_debug {
     ($logger:expr, $($arg:tt)*) => {
-        $logger.log("DEBUG", &format!($($arg)*)).unwrap_or_else(|e| eprintln!("Logging error: {}", e));
+        let _ = $logger.log("DEBUG", &format!($($arg)*)).await;
     }
 }
 
 #[macro_export]
 macro_rules! log_info {
     ($logger:expr, $($arg:tt)*) => {
-        $logger.log("INFO", &format!($($arg)*)).unwrap_or_else(|e| eprintln!("Logging error: {}", e));
+        let _ = $logger.log("INFO", &format!($($arg)*)).await;
     }
 }
 
 #[macro_export]
 macro_rules! log_error {
     ($logger:expr, $($arg:tt)*) => {
-        $logger.log("ERROR", &format!($($arg)*)).unwrap_or_else(|e| eprintln!("Logging error: {}", e));
+        let _ = $logger.log("ERROR", &format!($($arg)*)).await;
     }
 }

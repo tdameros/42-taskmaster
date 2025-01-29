@@ -30,12 +30,12 @@ impl Program {
     }
 
     /// update self state
-    pub(super) fn monitor(&mut self, logger: &Logger) {
-        self.process_vec.iter_mut().for_each(|process| {
-            if let Err(e) = process.react_to_program_state(&self.name) {
+    pub(super) async fn monitor(&mut self, logger: &Logger) {
+        for process in self.process_vec.iter_mut() {
+            if let Err(e) = process.react_to_program_state(&self.name).await {
                 log_error!(logger, "{e}");
             }
-        });
+        }
     }
 
     /// in the event of a config reload this will tell if the given program should be kept as is
@@ -45,15 +45,15 @@ impl Program {
             .map_or(false, |cfg| cfg == &self.config)
     }
 
-    pub(super) fn shutdown_all_process(&mut self, logger: &Logger) {
-        self.process_vec.iter_mut().for_each(|process| {
+    pub(super) async fn shutdown_all_process(&mut self, logger: &Logger) {
+        for process in self.process_vec.iter_mut() {
             if let Err(e) = process.send_signal(&self.config.stop_signal) {
                 log_error!(logger, "{e}");
-                if let Err(e) = process.kill() {
+                if let Err(e) = process.kill().await {
                     log_error!(logger, "{e}");
                 }
             }
-        });
+        }
     }
 
     pub(super) fn clean_inactive_process(&mut self) {
@@ -82,18 +82,17 @@ impl Program {
     ///   but some errors occurred (includes both logic and process errors).
     /// - `Err(OrderError::TotalFailure(errors))` if all attempts to start processes failed due to
     ///   process errors (no successes and no active processes).
-    pub(super) fn start(&mut self) -> Result<(), OrderError> {
-        let results: Vec<Result<(), ProgramError>> = self
-            .process_vec
-            .iter_mut()
-            .map(|process| {
-                if process.is_active() {
-                    Err(ProgramError::Logic("Process is already active".to_string()))
-                } else {
-                    process.start().map_err(ProgramError::Process)
-                }
-            })
-            .collect();
+    pub(super) async fn start(&mut self) -> Result<(), OrderError> {
+        let mut results = Vec::new();
+
+        for process in self.process_vec.iter_mut() {
+            let result = if process.is_active() {
+                Err(ProgramError::Logic("Process is already active".to_string()))
+            } else {
+                process.start().await.map_err(ProgramError::Process)
+            };
+            results.push(result);
+        }
 
         determine_order_result(results)
     }
@@ -106,23 +105,24 @@ impl Program {
     ///   but some errors occurred (includes both logic and process errors).
     /// - `Err(OrderError::TotalFailure(errors))` if all attempts to stop processes failed due to
     ///   process errors (no successes and no inactive processes).
-    pub(super) fn stop(&mut self) -> Result<(), OrderError> {
-        let results: Vec<Result<(), ProgramError>> = self
-            .process_vec
-            .iter_mut()
-            .map(|process| {
-                if !process.is_active() {
-                    Err(ProgramError::Logic(
-                        "Process is already inactive".to_string(),
-                    ))
+    pub(super) async fn stop(&mut self) -> Result<(), OrderError> {
+        let mut results = Vec::new();
+
+        for process in &mut self.process_vec {
+            if !process.is_active() {
+                results.push(Err(ProgramError::Logic(
+                    "Process is already inactive".to_string(),
+                )));
+            } else {
+                let signal_result = process.send_signal(&self.config.stop_signal);
+                if signal_result.is_err() {
+                    let kill_result = process.kill().await.map_err(ProgramError::Process);
+                    results.push(kill_result);
                 } else {
-                    process
-                        .send_signal(&self.config.stop_signal)
-                        .or_else(|_| process.kill())
-                        .map_err(ProgramError::Process)
+                    results.push(signal_result.map_err(ProgramError::Process));
                 }
-            })
-            .collect();
+            }
+        }
 
         determine_order_result(results)
     }
@@ -136,11 +136,11 @@ impl Program {
     ///
     /// # Note
     /// This function includes a 1-second delay between stop and start operations.
-    pub(super) fn restart(&mut self, logger: &Logger) -> Result<(), OrderError> {
-        let stop_results = self.stop();
+    pub(super) async fn restart(&mut self, logger: &Logger) -> Result<(), OrderError> {
+        let stop_results = self.stop().await;
         sleep(Duration::from_secs(1));
-        self.monitor(logger);
-        let start_results = self.start();
+        self.monitor(logger).await;
+        let start_results = self.start().await;
 
         squish_order_result(stop_results, start_results)
     }

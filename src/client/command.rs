@@ -24,26 +24,33 @@ pub enum Command {
 /* -------------------------------------------------------------------------- */
 impl Command {
     /// This Function will match the command and execute it properly
-    pub async fn execute(&self, stream: &mut TcpStream) -> Result<(), TaskmasterError> {
+    pub async fn execute(&self, stream: &mut TcpStream) -> Result<Response, TaskmasterError> {
         match self {
             Command::Exit => {
                 Command::exit();
-                Ok(())
+                Ok(Response::Success(String::from("Success exit")))
             }
             Command::Help => {
                 Command::help();
-                Ok(())
+                Ok(Response::Success(String::from("Success help")))
             }
             Command::Request(request) => {
                 Command::forward_to_server(request, stream).await?;
                 let response: Result<Response, TaskmasterError> = receive(stream).await;
                 match response {
-                    Ok(result) => print!("{result}"),
+                    Ok(result) => {
+                        print!("{result}");
+                        Ok(result)
+                    }
                     Err(error) => {
-                        println!("{error}");
+                        if error.connection_lost() {
+                            eprintln!("Connection lost with server");
+                            std::process::exit(1);
+                        }
+                        eprintln!("{error}");
+                        Err(error)
                     }
                 }
-                Ok(())
             }
         }
     }
@@ -127,6 +134,7 @@ impl TryFrom<&str> for Command {
                 "start" => Command::Request(Request::Start(argument.to_owned())),
                 "stop" => Command::Request(Request::Stop(argument.to_owned())),
                 "restart" => Command::Request(Request::Restart(argument.to_owned())),
+                "attach" => Command::Request(Request::Attach(argument.to_owned())),
                 _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
             }
         };

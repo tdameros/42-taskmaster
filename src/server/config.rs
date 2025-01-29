@@ -7,9 +7,10 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::{fs, path::Path};
 use tcl::error::TaskmasterError;
+use tokio::sync::RwLock;
 
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */

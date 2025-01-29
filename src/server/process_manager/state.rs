@@ -75,21 +75,21 @@ impl Process {
         }
     }
 
-    pub(super) fn react_never_started_yet(&mut self) -> Result<(), ProcessError> {
+    pub(super) async fn react_never_started_yet(&mut self) -> Result<(), ProcessError> {
         if self.config.start_at_launch {
-            self.start()?;
+            self.start().await?;
         }
 
         Ok(())
     }
 
-    pub(super) fn react_backoff(&mut self, program_name: &str) -> Result<(), ProcessError> {
+    pub(super) async fn react_backoff(&mut self, program_name: &str) -> Result<(), ProcessError> {
         use std::cmp::Ordering as O;
         match self
             .number_of_restart
             .cmp(&self.config.max_number_of_restart)
         {
-            O::Less => match self.start() {
+            O::Less => match self.start().await {
                 Ok(_) => self.number_of_restart += 1,
                 Err(e) => {
                     self.number_of_restart += 1;
@@ -110,26 +110,26 @@ impl Process {
         Ok(())
     }
 
-    pub(super) fn react_stopping(&mut self) -> Result<(), ProcessError> {
+    pub(super) async fn react_stopping(&mut self) -> Result<(), ProcessError> {
         if self.its_time_to_kill_the_child() {
-            self.kill()?;
+            self.kill().await?;
         };
 
         Ok(())
     }
 
-    pub(super) fn react_expected_exit(&mut self) -> Result<(), ProcessError> {
+    pub(super) async fn react_expected_exit(&mut self) -> Result<(), ProcessError> {
         use crate::config::AutoRestart as AR;
         match self.config.auto_restart {
-            AR::Always => self.start(),
+            AR::Always => self.start().await,
             AR::Unexpected | AR::Never => Ok(()),
         }
     }
 
-    pub(super) fn react_unexpected_exit(&mut self) -> Result<(), ProcessError> {
+    pub(super) async fn react_unexpected_exit(&mut self) -> Result<(), ProcessError> {
         use crate::config::AutoRestart as AR;
         match self.config.auto_restart {
-            AR::Always | AR::Unexpected => self.start(),
+            AR::Always | AR::Unexpected => self.start().await,
             AR::Never => Ok(()),
         }
     }

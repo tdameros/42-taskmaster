@@ -1,8 +1,13 @@
 /* -------------------------------------------------------------------------- */
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
-
 use crate::config::ProgramConfig;
+use crate::ring_buffer::RingBuffer;
+use std::sync::Arc;
+use tokio::{
+    process::Child,
+    sync::{broadcast, RwLock},
+};
 
 /* -------------------------------------------------------------------------- */
 /*                                   Module                                   */
@@ -18,10 +23,10 @@ mod state;
 
 /* --------------------------------- Process -------------------------------- */
 /// represent a process managed by taskmaster
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Process {
     /// the handle to the process
-    child: Option<std::process::Child>,
+    child: Option<Child>,
 
     /// the time when the process was launched, used to determine the
     /// transition from starting to running
@@ -39,6 +44,10 @@ struct Process {
     /// current number of restart, it increment only when the process was
     /// restarted when it was consider to be in a starting state
     number_of_restart: u32,
+
+    sender: Arc<RwLock<broadcast::Sender<String>>>,
+
+    stdout_history: Arc<RwLock<RingBuffer<String>>>,
 }
 
 /// Represent the state of a given process
@@ -93,6 +102,7 @@ pub enum ProcessError {
 }
 
 /* --------------------------------- Program -------------------------------- */
+
 /// represent a program
 #[derive(Debug, Default)]
 struct Program {
@@ -132,4 +142,4 @@ pub(super) struct ProgramManager {
 }
 
 /// a sharable version of a process manager, it can be passe through thread safely + use in a concurrent environment without fear thank Rust !
-pub(super) type SharedProcessManager = std::sync::Arc<std::sync::RwLock<ProgramManager>>;
+pub(super) type SharedProcessManager = Arc<RwLock<ProgramManager>>;
