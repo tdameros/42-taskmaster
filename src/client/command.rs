@@ -70,6 +70,7 @@ impl Command {
             stop [PROGRAM]      Stop a program
             restart [PROGRAM]   Restart a program
             reload              Reload configuration file
+            attach [PROGRAM]    Attach to a program (CTRL + C to detach)
             exit                Exit client shell
             help                Show this help message
 
