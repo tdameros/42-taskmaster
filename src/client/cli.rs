@@ -2,11 +2,12 @@
 /*                                   Import                                   */
 /* -------------------------------------------------------------------------- */
 use crate::history::History;
-use libc::{tcgetattr, tcsetattr, termios, ECHO, ICANON, TCSANOW};
+// use libc::{tcgetattr, tcsetattr, termios, ECHO, ICANON, TCSANOW};
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 use tcl::error::TaskmasterError;
-
+use tcl::mylibc as libc;
+use tcl::mylibc::get_terminal_attributes;
 /* -------------------------------------------------------------------------- */
 /*                                  Constants                                 */
 /* -------------------------------------------------------------------------- */
@@ -39,18 +40,18 @@ impl Cli {
 
     pub fn read_line(&mut self) -> Result<String, TaskmasterError> {
         Self::display_prompt()?;
-        let origin_termios = Self::enable_raw_mode();
+        let origin_termios = Self::enable_raw_mode()?;
         self.history.push(String::new());
         let _ = self.history.restore();
         let mut input = Self::getch().inspect_err(|_| {
-            Self::disable_raw_mode(origin_termios);
+            libc::disable_raw_mode(origin_termios).expect("Failed to disable termios raw mode");
         })?;
         while !(input.len() == 1 && input[0] == b'\n') {
             self.handle_input(input).inspect_err(|_| {
-                Self::disable_raw_mode(origin_termios);
+                libc::disable_raw_mode(origin_termios).expect("Failed to disable termios raw mode");
             })?;
             input = Self::getch().inspect_err(|_| {
-                Self::disable_raw_mode(origin_termios);
+                libc::disable_raw_mode(origin_termios).expect("Failed to disable termios raw mode");
             })?;
         }
         println!();
@@ -61,34 +62,21 @@ impl Cli {
         }
         let return_line = self.line.clone();
         self.line.clear();
-        Self::disable_raw_mode(origin_termios);
+        libc::disable_raw_mode(origin_termios)?;
         Ok(return_line)
     }
 
     /// Enable raw mode to read single keypresses without waiting for Enter
-    fn enable_raw_mode() -> termios {
+    fn enable_raw_mode() -> Result<libc::Termios, io::Error> {
         let fd = io::stdin().as_raw_fd();
-        let mut termios = unsafe {
-            let mut termios = std::mem::zeroed();
-            tcgetattr(fd, &mut termios);
-            termios
-        };
+        let mut termios = get_terminal_attributes(fd)?;
 
         let orig_termios = termios;
         // Disable canonical mode and echo
-        termios.c_lflag &= !(ICANON | ECHO);
+        termios.c_lflag &= !(libc::ICANON | libc::ECHO);
         // Apply changes immediately
-        unsafe { tcsetattr(fd, TCSANOW, &termios) };
-
-        orig_termios
-    }
-
-    /// Restore the terminal to its original settings
-    fn disable_raw_mode(orig_termios: termios) {
-        let fd = io::stdin().as_raw_fd();
-        unsafe {
-            tcsetattr(fd, TCSANOW, &orig_termios);
-        }
+        libc::set_terminal_attributes(fd, libc::TCSANOW, &termios)?;
+        Ok(orig_termios)
     }
 
     /// Function to read a single keypress, including escape sequences

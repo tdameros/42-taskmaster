@@ -10,6 +10,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::{fs, path::Path};
 use tcl::error::TaskmasterError;
+use tcl::mylibc as libc;
 use tokio::sync::RwLock;
 
 /* -------------------------------------------------------------------------- */

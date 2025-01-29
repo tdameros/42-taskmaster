@@ -15,11 +15,13 @@ use std::{
     process::{ExitStatus, Stdio},
     time::SystemTime,
 };
+use tcl::mylibc as libc;
 use tokio::{
     io::{AsyncReadExt, BufReader},
     process::{ChildStdout, Command},
     sync::{broadcast, RwLock},
 };
+
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
 /* -------------------------------------------------------------------------- */
@@ -160,12 +162,8 @@ impl Process {
         match child_id {
             Some(id) => {
                 let signal_number = Self::signal_to_libc(signal);
-                let result = unsafe { libc::kill(id as libc::pid_t, signal_number as libc::c_int) };
-
-                if result == -1 {
-                    return Err(ProcessError::Signal(std::io::Error::last_os_error()));
-                }
-
+                libc::kill(id as libc::pid_t, signal_number as std::ffi::c_int)
+                    .map_err(ProcessError::Signal)?;
                 self.time_since_shutdown = Some(SystemTime::now());
                 self.started_since = None;
                 self.state = ProcessState::Stopping;
@@ -176,7 +174,7 @@ impl Process {
     }
 
     /// Convert our Signal enum to libc signal constants
-    fn signal_to_libc(signal: &Signal) -> libc::c_int {
+    fn signal_to_libc(signal: &Signal) -> std::ffi::c_int {
         match signal {
             Signal::SIGABRT => libc::SIGABRT,
             Signal::SIGALRM => libc::SIGALRM,
@@ -369,7 +367,7 @@ impl Process {
 
     /// Set new umask and return the previous value
     fn set_umask(new_umask: libc::mode_t) -> libc::mode_t {
-        unsafe { libc::umask(new_umask) }
+        libc::set_umask(new_umask)
     }
 
     fn set_command_redirection(&self, command: &mut Command) -> Result<(), std::io::Error> {
