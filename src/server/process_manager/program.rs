@@ -8,8 +8,9 @@ use crate::{
     log_error,
     logger::Logger,
 };
-use std::{error::Error, fmt::Display, thread::sleep, time::Duration};
+use std::{error::Error, fmt::Display, time::Duration};
 use tcl::message::Response;
+use tokio::time::sleep;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct Implementation                           */
@@ -136,7 +137,7 @@ impl Program {
     /// This function includes a 1-second delay between stop and start operations.
     pub(super) async fn restart(&mut self, logger: &Logger) -> Result<(), OrderError> {
         let stop_results = self.stop().await;
-        sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(1)).await;
         self.monitor(logger).await;
         let start_results = self.start().await;
 
