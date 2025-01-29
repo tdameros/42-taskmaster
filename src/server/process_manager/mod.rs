@@ -47,7 +47,6 @@ struct Process {
 
     sender: Arc<RwLock<broadcast::Sender<String>>>,
 
-    // stdout_history: Arc<RwLock<Vec<String>>>,
     stdout_history: Arc<RwLock<RingBuffer<String>>>,
 }
 
