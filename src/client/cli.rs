@@ -38,14 +38,20 @@ impl Cli {
     }
 
     pub fn read_line(&mut self) -> Result<String, TaskmasterError> {
-        let origin_termios = Self::enable_raw_mode();
         Self::display_prompt()?;
+        let origin_termios = Self::enable_raw_mode();
         self.history.push(String::new());
         let _ = self.history.restore();
-        let mut input = Self::getch()?;
+        let mut input = Self::getch().inspect_err(|_| {
+            Self::disable_raw_mode(origin_termios);
+        })?;
         while !(input.len() == 1 && input[0] == b'\n') {
-            self.handle_input(input)?;
-            input = Self::getch()?;
+            self.handle_input(input).inspect_err(|_| {
+                Self::disable_raw_mode(origin_termios);
+            })?;
+            input = Self::getch().inspect_err(|_| {
+                Self::disable_raw_mode(origin_termios);
+            })?;
         }
         println!();
         if !self.line.is_empty() {
