@@ -196,7 +196,11 @@ pub async fn receive_with_shared_tcp_stream<T: for<'a> Deserialize<'a>>(
 /*                           Display Implementation                           */
 /* -------------------------------------------------------------------------- */
 fn format_duration(duration: Duration) -> String {
-    format!("{:?} (Unix Timestamp)", duration.as_secs())
+    let secs = duration.as_secs();
+    let hours = secs / 3600;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }
 
 impl Display for ProcessState {
@@ -219,7 +223,7 @@ impl Display for ProcessStatus {
         writeln!(
             f,
             "│ {:20} {}",
-            "Started:",
+            "Started since:",
             self.start_time
                 .map_or("Not yet".to_string(), |time| format_duration(
                     SystemTime::now().duration_since(time).unwrap()
