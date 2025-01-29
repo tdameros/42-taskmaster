@@ -24,8 +24,9 @@
     workingdir: /tmp
     autostart: true
     autorestart: unexpected
-    exitcodes: 
+    exitcodes:
       - 0
+      - 2
     startretries: 3
     starttime: 5
     stopsignal: SIGUSR1

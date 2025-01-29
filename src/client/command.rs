@@ -127,6 +127,7 @@ impl TryFrom<&str> for Command {
                 "start" => Command::Request(Request::Start(argument.to_owned())),
                 "stop" => Command::Request(Request::Stop(argument.to_owned())),
                 "restart" => Command::Request(Request::Restart(argument.to_owned())),
+                "attach" => Command::Request(Request::Attach(argument.to_owned())),
                 _ => return Err(TaskmasterError::Custom(format!("'{command}' Not found"))),
             }
         };
