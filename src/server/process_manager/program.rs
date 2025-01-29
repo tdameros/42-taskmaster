@@ -40,9 +40,7 @@ impl Program {
 
     /// in the event of a config reload this will tell if the given program should be kept as is
     pub(super) fn should_be_kept(&self, config: &Config) -> bool {
-        config
-            .get(&self.name)
-            .map_or(false, |cfg| cfg == &self.config)
+        config.get(&self.name) == Some(&self.config)
     }
 
     pub(super) async fn shutdown_all_process(&mut self, logger: &Logger) {

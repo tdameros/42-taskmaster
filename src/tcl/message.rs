@@ -99,7 +99,7 @@ pub enum ProcessState {
 /*                                  Function                                  */
 /* -------------------------------------------------------------------------- */
 /// write the message to the socket returning an error if it fails
-pub async fn send<'a, T: Serialize>(
+pub async fn send<T: Serialize>(
     stream: &mut TcpStream,
     message: &T,
 ) -> Result<(), TaskmasterError> {
@@ -120,7 +120,7 @@ pub async fn send<'a, T: Serialize>(
     Ok(())
 }
 
-pub async fn send_with_shared_tcp_stream<'a, T: Serialize>(
+pub async fn send_with_shared_tcp_stream<T: Serialize>(
     stream: Arc<Mutex<WriteHalf<TcpStream>>>,
     message: &T,
 ) -> Result<(), TaskmasterError> {
