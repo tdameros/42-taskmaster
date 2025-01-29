@@ -59,15 +59,15 @@ async fn main() {
         log_info!(shared_logger, "Waiting for Client To arrive");
         match listener.accept().await {
             Ok((socket, _)) => {
-                let shared_logger1 = shared_logger.clone();
-                let shared_config = shared_config.clone();
-                let shared_process_manager = shared_process_manager.clone();
+                let shared_logger_clone = shared_logger.clone();
+                let shared_config_clone = shared_config.clone();
+                let shared_process_manager_clone = shared_process_manager.clone();
                 tokio::spawn(async move {
                     ClientHandler::handle_client(
                         socket,
-                        shared_logger1.clone(),
-                        shared_config,
-                        shared_process_manager,
+                        shared_logger_clone,
+                        shared_config_clone,
+                        shared_process_manager_clone,
                     )
                     .await;
                 });
