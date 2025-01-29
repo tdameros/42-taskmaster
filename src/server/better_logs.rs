@@ -11,7 +11,11 @@ use std::thread;
 pub fn send_http_message(address: String, message: String) {
     thread::spawn(move || {
         // Connect to the server
-        let mut stream = TcpStream::connect(address.to_owned()).unwrap();
+        let stream_result = TcpStream::connect(address.to_owned());
+        if stream_result.is_err() {
+            return;
+        }
+        let mut stream = stream_result.unwrap();
 
         // Prepare the JSON payload
         let body = format!("{{\"message\":\"{}\"}}", message);
@@ -44,7 +48,11 @@ pub fn send_http_message(address: String, message: String) {
 pub fn send_notification(token: String, title: String, body: String) {
     thread::spawn(move || {
         // Connect to the Pushbullet API server
-        let mut stream = TcpStream::connect("api.pushbullet.com:443").unwrap();
+        let stream_result = TcpStream::connect("api.pushbullet.com:443").unwrap();
+        if stream_result.is_err() {
+            return;
+        }
+        let mut stream = stream_result.unwrap();
 
         // Prepare the JSON payload
         let json_payload = format!(
