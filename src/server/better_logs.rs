@@ -45,42 +45,25 @@ pub fn send_http_message(address: String, message: String) {
 }
 
 #[cfg(feature = "reqwest")]
-pub fn send_notification(token: String, title: String, body: String) {
-    thread::spawn(move || {
-        // Connect to the Pushbullet API server
-        let stream_result = TcpStream::connect("api.pushbullet.com:443").unwrap();
-        if stream_result.is_err() {
-            return;
+pub async fn send_notification(token: String, title: String, body: String) {
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+
+        let res = client
+            .post("https://api.pushbullet.com/v2/pushes")
+            .header("Access-Token", token)
+            .json(&serde_json::json!({
+                "type": "note",
+                "title": title,
+                "body": body
+            }))
+            .send()
+            .await;
+        if let Ok(result) = res {
+            println!("Status: {}", result.status());
+            let _ = result.text().await.map(|res| {
+                println!("Response: {}", res);
+            });
         }
-        let mut stream = stream_result.unwrap();
-
-        // Prepare the JSON payload
-        let json_payload = format!(
-            r#"{{"type":"note","title":"{}","body":"{}"}}"#,
-            title.replace("\"", "\\\""),
-            body.replace("\"", "\\\"")
-        );
-
-        // Construct the HTTP POST request
-        let request = format!(
-            "POST /v2/pushes HTTP/1.1\r\n\
-         Host: api.pushbullet.com\r\n\
-         Authorization: Bearer {}\r\n\
-         Content-Type: application/json\r\n\
-         Content-Length: {}\r\n\
-         \r\n\
-         {}",
-            token,
-            json_payload.len(),
-            json_payload
-        );
-
-        // Send the request
-        stream.write_all(request.as_bytes()).unwrap();
-
-        // Read and discard the response
-        let mut response = String::new();
-        let _ = stream.read_to_string(&mut response);
-        println!("--{response}--");
     });
 }
