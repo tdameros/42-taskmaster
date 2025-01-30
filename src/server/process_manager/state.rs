@@ -3,6 +3,8 @@
 /* -------------------------------------------------------------------------- */
 
 use crate::better_logs::send_http_message;
+#[cfg(feature = "reqwest")]
+use crate::better_logs::send_notification;
 
 use super::{Process, ProcessError, ProcessState};
 
@@ -102,6 +104,17 @@ impl Process {
                         self.config.fatal_state_report_address.to_owned(),
                         format!("one process of {program_name} could not be launch successfully"),
                     );
+                }
+                #[cfg(feature = "reqwest")]
+                let token = std::env::var("API_KEY").unwrap_or_default();
+                #[cfg(feature = "reqwest")]
+                if !token.is_empty() {
+                    send_notification(
+                        token,
+                        program_name.to_owned(),
+                        "didn't start successfully".to_owned(),
+                    )
+                    .await;
                 }
                 self.state = ProcessState::Fatal;
             }
