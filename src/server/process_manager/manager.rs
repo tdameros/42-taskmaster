@@ -80,11 +80,14 @@ impl ProgramManager {
     }
 
     fn drain_to_purgatory(&mut self, config: &Config) {
-        self.purgatory.extend(
-            self.programs
-                .drain()
-                .filter(|(_name, program)| !program.should_be_kept(config)),
-        );
+        let mut new_programs = HashMap::new();
+        for (name, program) in self.programs.drain() {
+            match program.should_be_kept(config) {
+                true => new_programs.insert(name, program),
+                false => self.purgatory.insert(name, program),
+            };
+        }
+        self.programs = new_programs;
     }
 
     /// perform a shutdown of all the program inside the purgatory
