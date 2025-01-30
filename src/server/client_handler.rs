@@ -13,11 +13,12 @@ use tcl::error::TaskmasterError;
 use tcl::message::{
     receive_with_shared_tcp_stream, send_with_shared_tcp_stream, Request, Response,
 };
-use tokio::task::JoinHandle;
 use tokio::{
     io::{split, ReadHalf, WriteHalf},
     net::TcpStream,
     sync::Mutex,
+    task::JoinHandle,
+    time::{sleep, Duration},
 };
 /* -------------------------------------------------------------------------- */
 /*                                   Struct                                   */
@@ -172,6 +173,9 @@ impl Client {
     async fn detach(&mut self) -> Response {
         if let Some(ref mut task) = self.attached_task {
             task.abort();
+            while !task.is_finished() {
+                sleep(Duration::from_millis(100)).await;
+            }
             self.attached_task = None;
             Response::Success("Detach Successful".to_owned())
         } else {
