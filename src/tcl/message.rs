@@ -220,24 +220,22 @@ impl Display for ProcessStatus {
             self.pid
                 .map_or("Not assigned".to_string(), |pid| pid.to_string())
         )?;
-        writeln!(
-            f,
-            "│ {:20} {}",
-            "Started since:",
-            self.start_time
-                .map_or("Not yet".to_string(), |time| format_duration(
-                    SystemTime::now().duration_since(time).unwrap()
-                ))
-        )?;
-        writeln!(
-            f,
-            "│ {:20} {}",
-            "Stopping since:",
-            self.shutdown_time
-                .map_or("Not in progress".to_string(), |time| format_duration(
-                    SystemTime::now().duration_since(time).unwrap()
-                ))
-        )?;
+        if let Some(time) = self.start_time {
+            writeln!(
+                f,
+                "│ {:20} {}",
+                "Started since:",
+                format_duration(SystemTime::now().duration_since(time).unwrap())
+            )?;
+        }
+        if let Some(time) = self.shutdown_time {
+            writeln!(
+                f,
+                "│ {:20} {}",
+                "Stopping since:",
+                format_duration(SystemTime::now().duration_since(time).unwrap())
+            )?;
+        }
         writeln!(f, "│ {:20} {}", "Restarts:", self.number_of_restart)?;
         writeln!(f, "└────────────────────────────────────────────────────")
     }
