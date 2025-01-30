@@ -35,7 +35,15 @@ impl Command {
                 Ok(Response::Success(String::from("Success help")))
             }
             Command::Request(request) => {
-                Command::forward_to_server(request, stream).await?;
+                Command::forward_to_server(request, stream)
+                    .await
+                    .inspect_err(|e| {
+                        if e.connection_lost() {
+                            eprintln!("Connection lost with server");
+                            std::process::exit(1);
+                        }
+                        eprintln!("{e}");
+                    })?;
                 let response: Result<Response, TaskmasterError> = receive(stream).await;
                 match response {
                     Ok(result) => {
