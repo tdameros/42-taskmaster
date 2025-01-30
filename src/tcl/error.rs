@@ -38,13 +38,22 @@ impl std::fmt::Display for TaskmasterError {
 impl TaskmasterError {
     /// Return whenever an error is due to a client or server disconnecting
     pub fn connection_lost(&self) -> bool {
-        self.is_unexpected_end_of_file()
+        self.is_unexpected_end_of_file() || self.is_broken_pipe()
     }
 
     pub fn is_unexpected_end_of_file(&self) -> bool {
         match self {
             TaskmasterError::IoError(error) => {
                 matches!(error.kind(), std::io::ErrorKind::UnexpectedEof)
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_broken_pipe(&self) -> bool {
+        match self {
+            TaskmasterError::IoError(error) => {
+                matches!(error.kind(), std::io::ErrorKind::BrokenPipe)
             }
             _ => false,
         }
