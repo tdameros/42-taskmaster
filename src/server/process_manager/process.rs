@@ -309,7 +309,10 @@ impl Process {
         self.set_command_redirection(&mut command)
             .map_err(ProcessError::FailedToCreateRedirection)?;
 
-        let child = command.spawn().map_err(ProcessError::CouldNotSpawnChild)?;
+        let child = command.spawn().map_err({
+            self.state = ProcessState::Fatal;
+            ProcessError::CouldNotSpawnChild
+        })?;
 
         if let Some(umask) = original_umask {
             Self::set_umask(umask);
